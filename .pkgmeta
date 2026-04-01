@@ -1,0 +1,23 @@
+# Keep the addon directory stable to preserve SavedVariables and migration anchors.
+package-as: Cell_UnitFrames
+
+required-dependencies:
+  - cell
+
+externals:
+  Libs/LibDispel: https://github.com/lua-wow/LibDispel
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - Annotations.lua
+  - WidgetAnnotations.lua
+  - FramePoolAnnotation.lua
+  - README.md
+  - CREDITS.md
+  - PUBLISHING.md
+  - MIDNIGHT_MIGRATION.md
+  - build_release.py
+  - generate_changelog.sh
