@@ -15,6 +15,8 @@ local Util = CUF.Util
 local UnitGUID = UnitGUID
 
 local wipe = table.wipe
+local ResetCachedUnitName
+local CacheUnitName
 
 -------------------------------------------------
 -- MARK: Update All
@@ -58,7 +60,13 @@ local function UnitFrame_RegisterEvents(self)
     --self:RegisterEvent("ZONE_CHANGED_NEW_AREA") --? update status text
 
     if self._baseUnit == const.UNIT.TARGET or self._baseUnit == const.UNIT.TARGET_TARGET then
-        self:AddEventListener("PLAYER_TARGET_CHANGED", UnitFrame_UpdateAll, true)
+        self:AddEventListener("PLAYER_TARGET_CHANGED", function(button)
+            button.__unitGuid = nil
+            button.__displayedGuid = nil
+            button.__unitName = nil
+            button.__nameRetries = nil
+            UnitFrame_UpdateAll(button)
+        end, true)
     end
     if self._baseUnit == const.UNIT.FOCUS then
         self:AddEventListener("PLAYER_FOCUS_CHANGED", UnitFrame_UpdateAll, true)
@@ -72,6 +80,10 @@ local function UnitFrame_RegisterEvents(self)
     if self._baseUnit == const.UNIT.TARGET_TARGET then
         self:AddEventListener("UNIT_TARGET", function(button, event, unit, ...)
             if unit == "target" then
+                button.__unitGuid = nil
+                button.__displayedGuid = nil
+                button.__unitName = nil
+                button.__nameRetries = nil
                 UnitFrame_UpdateAll(button)
             end
         end, true)
@@ -150,9 +162,7 @@ local function UnitFrame_OnHide(self)
     if self.__unitGuid then
         self.__unitGuid = nil
     end
-    if self.__unitName then
-        self.__unitName = nil
-    end
+    ResetCachedUnitName(self)
     self.__displayedGuid = nil
     F.RemoveElementsExceptKeys(self.states, "unit", "displayedUnit")
 
@@ -188,6 +198,34 @@ end
 local UNKNOWN = _G["UNKNOWN"]
 local UNKNOWNOBJECT = _G["UNKNOWNOBJECT"]
 
+---@param self CUFUnitButton
+ResetCachedUnitName = function(self)
+    self.__unitName = nil
+    self.__nameRetries = nil
+end
+
+---@param self CUFUnitButton
+---@return boolean updated
+CacheUnitName = function(self)
+    local unit = self.states.unit
+    if not unit then return false end
+
+    local name = Util:GetUnitNameWithServer(unit)
+    if name ~= nil and Util.IsValueNonSecret(name)
+        and ((self.__nameRetries and self.__nameRetries >= 4) or (name ~= UNKNOWN and name ~= UNKNOWNOBJECT)) then
+        local changed = self.__unitName ~= name
+        self.__unitName = name
+        self.__nameRetries = nil
+        return changed
+    end
+
+    if self.__unitName == nil then
+        self.__nameRetries = (self.__nameRetries or 0) + 1
+    end
+
+    return false
+end
+
 -------------------------------------------------
 -- MARK: OnTick
 -------------------------------------------------
@@ -201,47 +239,29 @@ local function UnitFrame_OnTick(self)
 
         if self.states.unit and self.states.displayedUnit then
             local displayedGuid = UnitGUID(self.states.displayedUnit)
-            local displayedGuidChanged = false
-            if not Util.IsValueNonSecret(displayedGuid) or not Util.IsValueNonSecret(self.__displayedGuid) then
-                displayedGuidChanged = displayedGuid ~= nil
-            else
-                displayedGuidChanged = displayedGuid ~= self.__displayedGuid
-            end
+            local displayedGuidChanged = Util.IsValueNonSecret(displayedGuid) and displayedGuid ~= self.__displayedGuid
 
             if displayedGuidChanged then
                 -- NOTE: displayed unit entity changed
                 F.RemoveElementsExceptKeys(self.states, "unit", "displayedUnit")
                 self.__displayedGuid = displayedGuid
+                ResetCachedUnitName(self)
                 self._powerBarUpdateRequired = true
                 self._updateRequired = true
             end
 
             local guid = UnitGUID(self.states.unit)
-            local unitGuidChanged = false
-            if not Util.IsValueNonSecret(guid) or not Util.IsValueNonSecret(self.__unitGuid) then
-                unitGuidChanged = guid ~= nil
-            else
-                unitGuidChanged = guid ~= nil and guid ~= self.__unitGuid
-            end
+            local unitGuidChanged = Util.IsValueNonSecret(guid) and guid ~= self.__unitGuid
 
             if unitGuidChanged then
                 -- CUF:Log("guidChanged:", self:GetName(), self.states.unit, guid)
                 -- NOTE: unit entity changed
                 self.__unitGuid = Util.IsValueNonSecret(guid) and guid or nil
+                ResetCachedUnitName(self)
+            end
 
-                -- NOTE: only save players' names
-                if UnitIsPlayer(self.states.unit) then
-                    local name = Util:GetUnitNameWithServer(self.states.unit)
-                    if name ~= nil and Util.IsValueNonSecret(name)
-                        and ((self.__nameRetries and self.__nameRetries >= 4) or (name ~= UNKNOWN and name ~= UNKNOWNOBJECT)) then
-                        self.__unitName = name
-                        self.__nameRetries = nil
-                    else
-                        -- NOTE: update on next tick
-                        self.__nameRetries = (self.__nameRetries or 0) + 1
-                        self.__unitGuid = nil
-                    end
-                end
+            if CacheUnitName(self) then
+                self._updateRequired = true
             end
         end
     end
@@ -286,9 +306,7 @@ local function UnitFrame_OnAttributeChanged(self, name, value)
             if self.__unitGuid then -- self.__unitGuid is deleted when hide
                 self.__unitGuid = nil
             end
-            if self.__unitName then
-                self.__unitName = nil
-            end
+            ResetCachedUnitName(self)
             wipe(self.states)
         end
 

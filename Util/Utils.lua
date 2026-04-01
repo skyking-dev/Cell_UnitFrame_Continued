@@ -804,6 +804,69 @@ function Util.GetTranslitCellNickname(name, fullName)
     return name
 end
 
+---@param value any
+---@return string?
+local function GetSafeNonEmptyString(value)
+    if type(value) ~= "string" or not IsCellValueNonSecret(value) then
+        return nil
+    end
+
+    if value == "" then
+        return nil
+    end
+
+    return value
+end
+
+---@param name string?
+---@param fullName string?
+---@param format NameFormat?
+---@param fallbackName string?
+---@param maxLength number?
+---@return string?
+function Util:GetDisplayName(name, fullName, format, fallbackName, maxLength)
+    local hasRawName = type(name) == "string"
+    local rawNameIsSafe = hasRawName and IsCellValueNonSecret(name)
+    local safeFallbackName = GetSafeNonEmptyString(fallbackName)
+    local needsFormatting = (format ~= nil and format ~= const.NameFormat.FULL_NAME) or maxLength ~= nil
+
+    if hasRawName and not rawNameIsSafe and not needsFormatting then
+        return name
+    end
+
+    local displayName
+    if rawNameIsSafe then
+        displayName = name
+    elseif safeFallbackName then
+        displayName = safeFallbackName
+    else
+        return hasRawName and name or nil
+    end
+
+    if not IsCellValueNonSecret(displayName) then
+        return displayName
+    end
+
+    local safeFullName = GetSafeNonEmptyString(fullName)
+    if safeFullName == nil then
+        fullName = displayName
+    else
+        fullName = safeFullName
+    end
+
+    displayName = self.GetTranslitCellNickname(displayName, fullName)
+
+    if format and format ~= const.NameFormat.FULL_NAME then
+        displayName = self.FormatName(displayName, format)
+    end
+
+    if maxLength ~= nil then
+        displayName = self.ShortenString(displayName, maxLength)
+    end
+
+    return displayName
+end
+
 -------------------------------------------------
 -- MARK: Unit Info
 -------------------------------------------------
@@ -815,8 +878,10 @@ function Util:GetUnitName(unit)
     local name, server = UnitName(unit)
 
     local nameWithServer
-    if type(name) == "string" and type(server) == "string" and name ~= "" and server ~= "" then
-        nameWithServer = name .. "-" .. server
+    local safeName = GetSafeNonEmptyString(name)
+    local safeServer = GetSafeNonEmptyString(server)
+    if safeName ~= nil and safeServer ~= nil then
+        nameWithServer = safeName .. "-" .. safeServer
     end
 
     return name, nameWithServer

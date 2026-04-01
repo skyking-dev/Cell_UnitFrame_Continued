@@ -21,6 +21,30 @@ local tinsert = table.insert
 local wipe = table.wipe
 local ceil = math.ceil
 
+---@param value any
+---@return number?
+local function GetSafeNumber(value)
+    if type(value) == "number" and Util.IsValueNonSecret(value) then
+        return value
+    end
+end
+
+---@param value any
+---@return boolean?
+local function GetSafeBoolean(value)
+    if type(value) == "boolean" and Util.IsValueNonSecret(value) then
+        return value
+    end
+end
+
+---@param value any
+---@return string?
+local function GetSafeString(value)
+    if type(value) == "string" and Util.IsValueNonSecret(value) and value ~= "" then
+        return value
+    end
+end
+
 -------------------------------------------------
 -- MARK: Menu Options
 -------------------------------------------------
@@ -371,32 +395,45 @@ end)
 ---@return boolean show
 local function CheckFilter(icon, auraData)
     --TODO: Filter prio?
-    local spellId = auraData.spellId
+    local spellId = GetSafeNumber(auraData.spellId)
+    local auraName = GetSafeString(auraData.name)
 
     -- Cell Raid Debuffs
-    if icon.cellRaidDebuffs and CELL_RAID_DEBUFFS[spellId] or CELL_RAID_DEBUFFS[auraData.name] then return true end
+    if icon.cellRaidDebuffs and ((spellId and CELL_RAID_DEBUFFS[spellId]) or (auraName and CELL_RAID_DEBUFFS[auraName])) then
+        return true
+    end
 
     -- Blacklist / Whitelist Check
-    if icon.useBlacklist and icon.blacklist[spellId] then return false end
-    if icon.useWhitelist and not icon.whitelist[spellId] then return false end
+    if icon.useBlacklist and spellId and icon.blacklist[spellId] then return false end
+    if icon.useWhitelist then
+        if not spellId then return false end
+        if not icon.whitelist[spellId] then return false end
+    end
 
     -- Duration Check
-    local duration = auraData.duration
-    if icon.hideNoDuration and duration == 0 then return false end
-    if icon.minDuration and duration < icon.minDuration then return false end
-    if icon.maxDuration and duration > icon.maxDuration then return false end
+    local duration = GetSafeNumber(auraData.duration)
+    if duration ~= nil then
+        if icon.hideNoDuration and duration == 0 then return false end
+        if icon.minDuration and duration < icon.minDuration then return false end
+        if icon.maxDuration and duration > icon.maxDuration then return false end
+    end
 
-    if icon.dispellable and auraData.isDispellable then return true end
+    if icon.dispellable and GetSafeBoolean(auraData.isDispellable) then return true end
 
     -- Personal / Non-Personal Check
-    if icon.nonPersonal and auraData.sourceUnit ~= "player" then return true end
-    if icon.personal and auraData.sourceUnit == "player" then return true end
+    local sourceUnit = GetSafeString(auraData.sourceUnit)
+    if sourceUnit ~= nil then
+        if icon.nonPersonal and sourceUnit ~= "player" then return true end
+        if icon.personal and sourceUnit == "player" then return true end
+        if icon.castByNPC and sourceUnit == "npc" then return true end
+    elseif icon.personal and icon.nonPersonal then
+        return true
+    end
 
     -- Source Unit Check
-    if icon.boss and auraData.isBossAura then return true end
-    if icon.raid and auraData.isRaid then return true end
-    if icon.castByPlayers and auraData.isFromPlayerOrPlayerPet then return true end
-    if icon.castByNPC and auraData.sourceUnit == "npc" then return true end
+    if icon.boss and GetSafeBoolean(auraData.isBossAura) then return true end
+    if icon.raid and GetSafeBoolean(auraData.isRaid) then return true end
+    if icon.castByPlayers and GetSafeBoolean(auraData.isFromPlayerOrPlayerPet) then return true end
 
     return false
 end
@@ -407,18 +444,20 @@ local function HandleAura(auraData, icon)
     if not CheckFilter(icon, auraData) then return end
 
     local auraInstanceID = auraData.auraInstanceID
-    local count = auraData.applications
-    local expirationTime = auraData.expirationTime or 0
+    local count = GetSafeNumber(auraData.applications)
+    local expirationTime = GetSafeNumber(auraData.expirationTime)
+    local previousAura = icon._auraCache[auraInstanceID]
+    local previousExpiration = previousAura and GetSafeNumber(previousAura.expirationTime)
+    local previousCount = previousAura and GetSafeNumber(previousAura.applications)
 
     if Cell.vars.iconAnimation == "duration" then
-        local timeIncreased = icon._auraCache[auraInstanceID] and
-            (expirationTime - icon._auraCache[auraInstanceID]["expirationTime"] >= 0.5) or false
-        local countIncreased = icon._auraCache[auraInstanceID] and
-            (count > icon._auraCache[auraInstanceID]["applications"]) or false
+        local timeIncreased = previousExpiration ~= nil and expirationTime ~= nil and
+            (expirationTime - previousExpiration >= 0.5) or false
+        local countIncreased = previousCount ~= nil and count ~= nil and
+            (count > previousCount) or false
         auraData.refreshing = timeIncreased or countIncreased
     elseif Cell.vars.iconAnimation == "stack" then
-        auraData.refreshing = icon._auraCache[auraInstanceID] and
-            (count > icon._auraCache[auraInstanceID]["applications"]) or false
+        auraData.refreshing = previousCount ~= nil and count ~= nil and (count > previousCount) or false
     end
 
     icon._auraCache[auraInstanceID] = auraData
@@ -529,11 +568,15 @@ local function UpdateAuraIcons(icons)
     table.sort(icons._auraInstanceIDs, function(a, b)
         local aData = icons._auraCache[a]
         local bData = icons._auraCache[b]
-        if not aData or not bData then return false end
+        if not aData or not bData then
+            return (a or 0) < (b or 0)
+        end
 
         if icons.useWhitelist and icons.whiteListPriority then
-            local aIdx = icons.whitelist[aData.spellId]
-            local bIdx = icons.whitelist[bData.spellId]
+            local aSpellId = GetSafeNumber(aData.spellId)
+            local bSpellId = GetSafeNumber(bData.spellId)
+            local aIdx = aSpellId and icons.whitelist[aSpellId]
+            local bIdx = bSpellId and icons.whitelist[bSpellId]
 
             if aIdx or bIdx then
                 if not aIdx and bIdx then return false end
@@ -542,7 +585,15 @@ local function UpdateAuraIcons(icons)
             end
         end
 
-        return aData.expirationTime > bData.expirationTime
+        local aExpiration = GetSafeNumber(aData.expirationTime)
+        local bExpiration = GetSafeNumber(bData.expirationTime)
+        if aExpiration ~= nil and bExpiration ~= nil then
+            return aExpiration > bExpiration
+        end
+        if aExpiration ~= nil then return true end
+        if bExpiration ~= nil then return false end
+
+        return a < b
     end)
 
     -- Update icons
@@ -551,17 +602,36 @@ local function UpdateAuraIcons(icons)
         if not auraInstanceID then break end
 
         local auraData = icons._auraCache[auraInstanceID]
-        local dispelType = auraData.isHarmful and (auraData.dispelName or "") or nil
+        local isHarmful = icons.id == "debuffs" or GetSafeBoolean(auraData.isHarmful)
+        local dispelType = isHarmful and (GetSafeString(auraData.dispelName) or "") or nil
+        local duration = GetSafeNumber(auraData.duration) or 0
+        local expirationTime = GetSafeNumber(auraData.expirationTime)
+        local applications = GetSafeNumber(auraData.applications) or 0
+        local startTime = 0
+
+        if expirationTime ~= nil and duration > 0 then
+            startTime = expirationTime - duration
+        else
+            duration = 0
+        end
 
         icons._auraCount = icons._auraCount + 1
         icons[icons._auraCount]:SetCooldown(
-            (auraData.expirationTime or 0) - auraData.duration,
-            auraData.duration,
+            startTime,
+            duration,
             dispelType,
             auraData.icon,
-            auraData.applications,
+            applications,
             auraData.refreshing
         )
+
+        if expirationTime == nil or duration == 0 then
+            icons[icons._auraCount]:SetScript("OnUpdate", nil)
+            icons[icons._auraCount].duration:SetText("")
+        end
+        if applications == 0 then
+            icons[icons._auraCount].stack:SetText("")
+        end
 
         -- Tooltip
         ---@diagnostic disable-next-line: undefined-field

@@ -2,8 +2,6 @@
 local CUF = select(2, ...)
 
 local Cell = CUF.Cell
-local F = Cell.funcs
-
 ---@class CUF.widgets
 local W = CUF.widgets
 ---@class CUF.uFuncs
@@ -22,8 +20,6 @@ local UnitIsPlayer = UnitIsPlayer
 local UnitClassBase = function(unit)
     return select(2, UnitClass(unit))
 end
-
-local GetTranslitCellNickname = Util.GetTranslitCellNickname
 
 -------------------------------------------------
 -- MARK: AddWidget
@@ -70,9 +66,6 @@ local function Update(button)
 
     button.states.name = name
     button.states.isPlayer = UnitIsPlayer(unit)
-    if button.states.isPlayer and fullName == nil then
-        fullName = F.UnitFullName(unit)
-    end
     if button.states.isPlayer then
         button.states.fullName = fullName
     else
@@ -114,23 +107,16 @@ function W:CreateNameText(button)
     nameText.format = CUF.Defaults.Widgets.nameText.format
 
     function nameText:UpdateName()
-        local name = button.states.name
-        local fullName = button.states.fullName
+        local name = Util:GetDisplayName(button.states.name, button.states.fullName, self.format, button.__unitName)
 
-        if not Util.IsValueNonSecret(name) then
-            name = button.__unitName
-            fullName = button.__unitName
-        end
-
-        if name == nil or name == "" then
+        if name == nil then
             self:SetText("")
             return
         end
 
-        name = GetTranslitCellNickname(name, fullName)
-
-        if self.format ~= CUF.constants.NameFormat.FULL_NAME then
-            name = self.FormatName(name, self.format)
+        if Util.IsValueNonSecret(name) and name == "" then
+            self:SetText("")
+            return
         end
 
         self.UpdateTextWidth(nameText.text, name, nameText.width, button)

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fixed Midnight-safe target and target-of-target name rendering so secret names no longer disappear.
+- Updated shared name/custom tag formatting to use the same secret-safe display path and cached non-secret fallback names when available.
+- Reworked target aura caching and classification to keep Midnight secret auras, classify them with server-side filters when needed, and avoid Lua crashes on secret aura fields.
+- Hardened target buff/debuff icon filtering and rendering against secret values; additional in-game validation is still pending for exact Midnight aura behavior.
+
 ## v1.0.0 - 2026-03-31
 
 - Rebranded the project as `Cell_UnitFrame_Continued` for public fork distribution.

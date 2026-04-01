@@ -32,7 +32,6 @@ local nameLengths = {
 }
 
 local FormatText = Util.FormatText
-local GetTranslitCellNickname = Util.GetTranslitCellNickname
 
 local format = string.format
 local pcall = pcall
@@ -1015,69 +1014,43 @@ for type, length in pairs(nameLengths) do
     local abbrevExample = Util.ShortenString("S. Windrunner", length)
 
     W:AddTag("name:" .. type, "UNIT_NAME_UPDATE", function(unit)
-        local unitName = UnitName(unit)
-        if unitName then
-            unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-            return Util.ShortenString(unitName, length)
-        end
+        return Util:GetDisplayName(UnitName(unit), F.UnitFullName(unit), const.NameFormat.FULL_NAME, nil, length)
     end, "Name", normalExample)
 
     W:AddTag("name:abbrev:" .. type, "UNIT_NAME_UPDATE", function(unit)
-        local unitName = UnitName(unit)
-        if unitName then
-            unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-            local abbreviated = Util.FormatName(unitName, const.NameFormat.FIRST_INITIAL_LAST_NAME)
-            return Util.ShortenString(abbreviated, length)
-        end
+        return Util:GetDisplayName(UnitName(unit), F.UnitFullName(unit),
+            const.NameFormat.FIRST_INITIAL_LAST_NAME, nil, length)
     end, "Name", abbrevExample)
 
     W:AddTag("target:" .. type, "UNIT_TARGET", function(unit)
-        local unitName = UnitName(unit .. "target")
-        if unitName then
-            unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-            return Util.ShortenString(unitName, length)
-        end
+        local targetUnit = unit .. "target"
+        return Util:GetDisplayName(UnitName(targetUnit), F.UnitFullName(targetUnit),
+            const.NameFormat.FULL_NAME, nil, length)
     end, "Target", normalExample)
 
     W:AddTag("target:abbrev:" .. type, "UNIT_TARGET", function(unit)
-        local unitName = UnitName(unit .. "target")
-        if unitName then
-            unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-            local abbreviated = Util.FormatName(unitName, const.NameFormat.FIRST_INITIAL_LAST_NAME)
-            return Util.ShortenString(abbreviated, length)
-        end
+        local targetUnit = unit .. "target"
+        return Util:GetDisplayName(UnitName(targetUnit), F.UnitFullName(targetUnit),
+            const.NameFormat.FIRST_INITIAL_LAST_NAME, nil, length)
     end, "Target", abbrevExample)
 end
 
 W:AddTag("name", "UNIT_NAME_UPDATE", function(unit)
-    local unitName = UnitName(unit)
-    if unitName then
-        unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-        return unitName
-    end
+    return Util:GetDisplayName(UnitName(unit), F.UnitFullName(unit), const.NameFormat.FULL_NAME)
 end, "Name", "Sylvanas Windrunner")
 W:AddTag("name:abbrev", "UNIT_NAME_UPDATE", function(unit)
-    local unitName = UnitName(unit)
-    if unitName then
-        unitName = GetTranslitCellNickname(unitName, F.UnitFullName(unit))
-        return Util.FormatName(unitName, const.NameFormat.FIRST_INITIAL_LAST_NAME)
-    end
+    return Util:GetDisplayName(UnitName(unit), F.UnitFullName(unit), const.NameFormat.FIRST_INITIAL_LAST_NAME)
 end, "Name", "S. Windrunner")
 
 -- MARK: Target
 W:AddTag("target", "UNIT_TARGET", function(unit)
-    local targetName = UnitName(unit .. "target")
-    if targetName then
-        targetName = GetTranslitCellNickname(targetName, F.UnitFullName(unit .. "target"))
-        return targetName
-    end
+    local targetUnit = unit .. "target"
+    return Util:GetDisplayName(UnitName(targetUnit), F.UnitFullName(targetUnit), const.NameFormat.FULL_NAME)
 end, "Target", "Sylvanas Windrunner")
 W:AddTag("target:abbrev", "UNIT_TARGET", function(unit)
-    local targetName = UnitName(unit .. "target")
-    if targetName then
-        targetName = GetTranslitCellNickname(targetName, F.UnitFullName(unit .. "target"))
-        return Util.FormatName(targetName, const.NameFormat.FIRST_INITIAL_LAST_NAME)
-    end
+    local targetUnit = unit .. "target"
+    return Util:GetDisplayName(UnitName(targetUnit), F.UnitFullName(targetUnit),
+        const.NameFormat.FIRST_INITIAL_LAST_NAME)
 end, "Target", "S. Windrunner")
 
 -- MARK: Colors

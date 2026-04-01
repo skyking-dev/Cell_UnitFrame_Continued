@@ -1,9 +1,8 @@
 ---@class CUF
 local CUF = select(2, ...)
 
-local Cell = CUF.Cell
-local F = Cell.funcs
 local LibDispel = LibStub("LibDispel", true)
+local Util = CUF.Util
 
 ---@class CUF.Mixin
 local Mixin = CUF.Mixin
@@ -11,6 +10,9 @@ local Mixin = CUF.Mixin
 local const = CUF.constants
 
 local GetAuraDataByAuraInstanceID = C_UnitAuras.GetAuraDataByAuraInstanceID
+local GetAuraDataBySlot = C_UnitAuras.GetAuraDataBySlot
+local GetAuraSlots = C_UnitAuras.GetAuraSlots
+local IsAuraFilteredOutByInstanceID = C_UnitAuras.IsAuraFilteredOutByInstanceID
 local ForEachAura = AuraUtil.ForEachAura
 local wipe = table.wipe
 
@@ -37,6 +39,144 @@ local function CheckDebuffType(dispelName, spellID)
     return LibDispel:GetDispelType(spellID, dispelName)
 end
 
+local HELPFUL_FILTER = AuraUtil.AuraFilters.Helpful or "HELPFUL"
+local HARMFUL_FILTER = AuraUtil.AuraFilters.Harmful or "HARMFUL"
+
+---@param value any
+---@return boolean?
+local function GetSafeBoolean(value)
+    if type(value) == "boolean" and Util.IsValueNonSecret(value) then
+        return value
+    end
+end
+
+---@param aura AuraData
+---@param field string
+---@param previousAura AuraData?
+---@return boolean
+local function GetAuraBoolean(aura, field, previousAura)
+    local value = GetSafeBoolean(aura[field])
+    if value ~= nil then
+        return value
+    end
+
+    if previousAura ~= nil and type(previousAura[field]) == "boolean" then
+        return previousAura[field]
+    end
+
+    return false
+end
+
+---@param unit UnitToken
+---@param filter string
+---@param callback fun(aura: AuraData)
+local function IterateAurasByFilter(unit, filter, callback)
+    if unit == nil then
+        return
+    end
+
+    if GetAuraSlots and GetAuraDataBySlot then
+        local continuationToken
+
+        repeat
+            local results = { GetAuraSlots(unit, filter, nil, continuationToken) }
+            continuationToken = results[1]
+
+            for i = 2, #results do
+                local aura = GetAuraDataBySlot(unit, results[i])
+                if aura then
+                    callback(aura)
+                end
+            end
+        until continuationToken == nil
+
+        return
+    end
+
+    ForEachAura(unit, filter, nil, callback, true)
+end
+
+---@param unit UnitToken
+---@param auraInstanceID number?
+---@param filter string
+---@return boolean?
+local function MatchesAuraFilter(unit, auraInstanceID, filter)
+    if not IsAuraFilteredOutByInstanceID or auraInstanceID == nil or unit == nil then
+        return nil
+    end
+
+    local isFiltered = IsAuraFilteredOutByInstanceID(unit, auraInstanceID, filter)
+    if not Util.IsValueNonSecret(isFiltered) then
+        return nil
+    end
+
+    return not isFiltered
+end
+
+---@param aura AuraData
+---@param unit UnitToken
+---@param filterHint? string
+---@return boolean isHelpful
+---@return boolean isHarmful
+local function ResolveAuraFlags(aura, unit, filterHint)
+    if filterHint == HELPFUL_FILTER then
+        return true, false
+    elseif filterHint == HARMFUL_FILTER then
+        return false, true
+    end
+
+    if aura.isHelpful then
+        return true, false
+    elseif aura.isHarmful then
+        return false, true
+    end
+
+    local auraInstanceID = aura.auraInstanceID
+    local isHarmful = MatchesAuraFilter(unit, auraInstanceID, HARMFUL_FILTER)
+    if isHarmful then
+        return false, true
+    end
+
+    local isHelpful = MatchesAuraFilter(unit, auraInstanceID, HELPFUL_FILTER)
+    if isHelpful then
+        return true, false
+    end
+
+    return false, false
+end
+
+---@param aura AuraData?
+---@param unit UnitToken
+---@param previousAura AuraData?
+---@return AuraData?
+local function PrepareAura(aura, unit, previousAura)
+    if aura == nil or not Util.IsValueNonSecret(aura.auraInstanceID) then
+        return nil
+    end
+
+    local spellID = aura.spellId
+    aura.isNameplateOnly = GetAuraBoolean(aura, "isNameplateOnly", previousAura)
+    aura.isHarmful = GetAuraBoolean(aura, "isHarmful", previousAura)
+    aura.isHelpful = GetAuraBoolean(aura, "isHelpful", previousAura)
+    aura.isBossAura = GetAuraBoolean(aura, "isBossAura", previousAura)
+    aura.isRaid = GetAuraBoolean(aura, "isRaid", previousAura)
+    aura.isFromPlayerOrPlayerPet = GetAuraBoolean(aura, "isFromPlayerOrPlayerPet", previousAura)
+
+    if Util.IsValueNonSecret(spellID) then
+        local dispelName = Util.IsValueNonSecret(aura.dispelName) and aura.dispelName or nil
+        aura.dispelName = CheckDebuffType(dispelName, spellID)
+        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, aura.isHarmful) or false
+    elseif previousAura then
+        aura.dispelName = previousAura.dispelName
+        aura.isDispellable = previousAura.isDispellable
+    else
+        aura.dispelName = Util.IsValueNonSecret(aura.dispelName) and aura.dispelName or nil
+        aura.isDispellable = false
+    end
+
+    return aura
+end
+
 function AurasMixin:ResetAuraTables()
     wipe(self._auraBuffCache)
     wipe(self._auraDebuffCache)
@@ -52,16 +192,11 @@ end
 ---@param ignoreBuffs boolean
 ---@param ignoreDebuffs boolean
 ---@param unit UnitToken
+---@param filterHint? string
 ---@return AuraUtil.AuraUpdateChangedType
-local function ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit)
+local function ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit, filterHint)
+    aura = PrepareAura(aura, unit)
     if aura == nil then
-        return AuraUtil.AuraUpdateChangedType.None;
-    end
-
-    if Cell.isMidnight and (
-            not F.IsValueNonSecret(aura.auraInstanceID)
-            or not F.IsAuraNonSecret(aura)
-        ) then
         return AuraUtil.AuraUpdateChangedType.None;
     end
 
@@ -69,19 +204,22 @@ local function ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit)
         return AuraUtil.AuraUpdateChangedType.None;
     end
 
-    if aura.isHarmful and not ignoreDebuffs then
-        aura.dispelName = CheckDebuffType(aura.dispelName, aura.spellId)
-        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, aura.spellId, aura.dispelName, true) or false
+    local isHelpful, isHarmful = ResolveAuraFlags(aura, unit, filterHint)
+    aura.isHelpful = isHelpful
+    aura.isHarmful = isHarmful
 
-        if aura.dispelName ~= "" and aura.dispelName ~= "none" then
+    local spellID = aura.spellId
+    if Util.IsValueNonSecret(spellID) then
+        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, isHarmful) or false
+    end
+
+    if isHarmful and not ignoreDebuffs then
+        if aura.dispelName ~= nil and aura.dispelName ~= "" and aura.dispelName ~= "none" then
             return AuraUtil.AuraUpdateChangedType.Dispel
         end
 
         return AuraUtil.AuraUpdateChangedType.Debuff
-    elseif aura.isHelpful and not ignoreBuffs then
-        aura.dispelName = CheckDebuffType(aura.dispelName, aura.spellId)
-        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, aura.spellId, aura.dispelName, false) or false
-
+    elseif isHelpful and not ignoreBuffs then
         return AuraUtil.AuraUpdateChangedType.Buff
     end
 
@@ -96,11 +234,10 @@ function AurasMixin:ParseAllAuras(ignoreBuffs, ignoreDebuffs, unit)
     wipe(self._auraBuffCache)
     wipe(self._auraDebuffCache)
 
-    local batchCount = nil
-    local usePackedAura = true
     ---@param aura AuraData
-    local function HandleAura(aura)
-        local type = ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit)
+    ---@param filter string
+    local function HandleAura(aura, filter)
+        local type = ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit, filter)
         if type == AuraUtil.AuraUpdateChangedType.Debuff or type == AuraUtil.AuraUpdateChangedType.Dispel then
             self._auraDebuffCache[aura.auraInstanceID] = aura
         elseif type == AuraUtil.AuraUpdateChangedType.Buff then
@@ -109,14 +246,14 @@ function AurasMixin:ParseAllAuras(ignoreBuffs, ignoreDebuffs, unit)
     end
 
     if not ignoreDebuffs then
-        ForEachAura(self.states.unit, AuraUtil.AuraFilters.Harmful, batchCount,
-            HandleAura,
-            usePackedAura)
+        IterateAurasByFilter(unit, HARMFUL_FILTER, function(aura)
+            HandleAura(aura, HARMFUL_FILTER)
+        end)
     end
     if not ignoreBuffs then
-        ForEachAura(self.states.unit, AuraUtil.AuraFilters.Helpful, batchCount,
-            HandleAura,
-            usePackedAura)
+        IterateAurasByFilter(unit, HELPFUL_FILTER, function(aura)
+            HandleAura(aura, HELPFUL_FILTER)
+        end)
     end
 end
 
@@ -164,30 +301,40 @@ function AurasMixin:UpdateAurasInternal(event, unit, unitAuraUpdateInfo)
         if unitAuraUpdateInfo.updatedAuraInstanceIDs ~= nil then
             for _, auraInstanceID in ipairs(unitAuraUpdateInfo.updatedAuraInstanceIDs) do
                 if self._auraDebuffCache[auraInstanceID] ~= nil then
-                    local newAura = GetAuraDataByAuraInstanceID(self.states.unit, auraInstanceID)
-                    if Cell.isMidnight and newAura and (not F.IsValueNonSecret(newAura.auraInstanceID) or not F.IsAuraNonSecret(newAura)) then
-                        newAura = nil
-                    end
+                    local previousAura = self._auraDebuffCache[auraInstanceID]
+                    local newAura = GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+                    newAura = PrepareAura(newAura, unit, previousAura)
                     if newAura then
-                        newAura.dispelName = CheckDebuffType(newAura.dispelName, newAura.spellId)
-                        dispelsChanged = dispelsChanged or newAura.dispelName ~= "none"
+                        dispelsChanged = dispelsChanged or (newAura.dispelName ~= nil and newAura.dispelName ~= "none")
                     else
-                        dispelsChanged = dispelsChanged or self._auraDebuffCache[auraInstanceID].dispelName ~= "none"
+                        dispelsChanged = dispelsChanged or (previousAura.dispelName ~= nil and previousAura.dispelName ~= "none")
                     end
                     self._auraDebuffCache[auraInstanceID] = newAura
                     debuffsChanged = true
                 elseif self._auraBuffCache[auraInstanceID] ~= nil then
-                    local newAura = GetAuraDataByAuraInstanceID(self.states.unit, auraInstanceID)
-                    if Cell.isMidnight and newAura and (not F.IsValueNonSecret(newAura.auraInstanceID) or not F.IsAuraNonSecret(newAura)) then
-                        newAura = nil
-                    end
+                    local previousAura = self._auraBuffCache[auraInstanceID]
+                    local newAura = GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+                    newAura = PrepareAura(newAura, unit, previousAura)
                     if newAura then
                         stealableChanged = stealableChanged or newAura.isDispellable
                     else
-                        stealableChanged = stealableChanged or self._auraBuffCache[auraInstanceID].isDispellable
+                        stealableChanged = stealableChanged or previousAura.isDispellable
                     end
                     self._auraBuffCache[auraInstanceID] = newAura
                     buffsChanged = true
+                else
+                    local aura = GetAuraDataByAuraInstanceID(unit, auraInstanceID)
+                    local type = ProcessAura(aura, self._ignoreBuffs, self._ignoreDebuffs, unit)
+
+                    if type == AuraUtil.AuraUpdateChangedType.Debuff or type == AuraUtil.AuraUpdateChangedType.Dispel then
+                        self._auraDebuffCache[auraInstanceID] = aura
+                        debuffsChanged = true
+                        dispelsChanged = dispelsChanged or type == AuraUtil.AuraUpdateChangedType.Dispel
+                    elseif type == AuraUtil.AuraUpdateChangedType.Buff then
+                        self._auraBuffCache[auraInstanceID] = aura
+                        buffsChanged = true
+                        stealableChanged = stealableChanged or aura.isDispellable
+                    end
                 end
             end
         end
@@ -195,7 +342,8 @@ function AurasMixin:UpdateAurasInternal(event, unit, unitAuraUpdateInfo)
         if unitAuraUpdateInfo.removedAuraInstanceIDs ~= nil then
             for _, auraInstanceID in ipairs(unitAuraUpdateInfo.removedAuraInstanceIDs) do
                 if self._auraDebuffCache[auraInstanceID] ~= nil then
-                    dispelsChanged = dispelsChanged or self._auraDebuffCache[auraInstanceID].dispelName ~= "none"
+                    local dispelName = self._auraDebuffCache[auraInstanceID].dispelName
+                    dispelsChanged = dispelsChanged or (dispelName ~= nil and dispelName ~= "none")
                     self._auraDebuffCache[auraInstanceID] = nil
                     debuffsChanged = true
                 elseif self._auraBuffCache[auraInstanceID] ~= nil then
