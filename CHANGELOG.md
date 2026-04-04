@@ -7,7 +7,7 @@
 - Fixed Midnight health and power bar updates so they no longer call `ResetSmoothedValue()` on secret min/max data and trigger `MathUtil.Clamp` errors.
 - Hardened the cast bar against secret `startTime`, `endTime`, and empower hold values by falling back to duration objects whenever Lua time arithmetic is unsafe.
 - Added `/cuf midnight` diagnostics to help verify Midnight restriction and private-aura API state in-game.
-- Tested this release against `https://github.com/skyking-dev/Cell` and confirmed normal operation.
+- Reviewed compatibility against `https://github.com/skyking-dev/Cell` and validated the packaged release; in-game verification was not available in this environment.
 
 ## v1.0.1 - 2026-04-01
 
