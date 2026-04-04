@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import shutil
 import tempfile
 import zipfile
@@ -12,6 +13,7 @@ from pathlib import Path
 
 ADDON_DIR = "Cell_UnitFrames"
 TOC_NAME = "Cell_UnitFrames.toc"
+XML_FILE_REF_RE = re.compile(r'<(?:Script|Include)\s+file="([^"]+)"')
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +46,31 @@ def toc_payload_paths(toc_path: Path) -> list[Path]:
             continue
         paths.append(Path(entry))
     return paths
+
+
+def expand_payload_paths(root: Path, initial_paths: list[Path]) -> list[Path]:
+    payload_paths: list[Path] = []
+    seen: set[Path] = set()
+    pending = list(initial_paths)
+
+    while pending:
+        relative_path = pending.pop(0)
+        normalized_path = Path(relative_path)
+        if normalized_path in seen:
+            continue
+
+        seen.add(normalized_path)
+        payload_paths.append(normalized_path)
+
+        source = root / normalized_path
+        if source.suffix.lower() != ".xml" or not source.exists():
+            continue
+
+        xml_text = source.read_text(encoding="utf-8")
+        for xml_ref in XML_FILE_REF_RE.findall(xml_text):
+            pending.append((normalized_path.parent / xml_ref).resolve().relative_to(root.resolve()))
+
+    return payload_paths
 
 
 def validate_inputs(root: Path, payload_paths: list[Path]) -> None:
@@ -91,7 +118,7 @@ def main() -> int:
     args = parse_args()
     root = Path(__file__).resolve().parent
     toc_path = root / TOC_NAME
-    payload_paths = toc_payload_paths(toc_path)
+    payload_paths = expand_payload_paths(root, toc_payload_paths(toc_path))
     validate_inputs(root, payload_paths)
 
     output_zip = (root / args.out_dir / f"{ADDON_DIR}-{args.version}.zip").resolve()

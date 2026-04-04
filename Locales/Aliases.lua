@@ -2,7 +2,8 @@
 local CUF = select(2, ...)
 
 ---@class CUF.Locales
-local L = CUF.L
+local L = CUF.L or {}
+CUF.L = L
 
 ----------------------------------
 -- !!DO NOT ADD TO CURSEFORGE!! --

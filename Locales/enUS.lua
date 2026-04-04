@@ -2,8 +2,21 @@
 local CUF = select(2, ...)
 
 ---@class CUF.Locales
-local L = Cell.L
-CUF.L = L
+local L = CUF.L
+
+if not L then
+    L = setmetatable({}, {
+        __index = function(_, key)
+            local CellLocales = _G.Cell and _G.Cell.L
+            if CellLocales and CellLocales[key] ~= nil then
+                return CellLocales[key]
+            end
+
+            return key
+        end,
+    })
+    CUF.L = L
+end
 
 -- Tabs
 L.unitFramesTab = "Unit Frames"

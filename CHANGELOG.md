@@ -6,6 +6,8 @@
 - Improved Midnight aura processing so secret spell data falls back safely for filtering, dispels, player-source checks, and totem displays.
 - Fixed Midnight health and power bar updates so they no longer call `ResetSmoothedValue()` on secret min/max data and trigger `MathUtil.Clamp` errors.
 - Hardened the cast bar against secret `startTime`, `endTime`, and empower hold values by falling back to duration objects whenever Lua time arithmetic is unsafe.
+- Fixed locale bootstrap so packaged installs no longer fail when `CUF.L` or `Cell.L` is unavailable during early XML loading.
+- Fixed release packaging to include locale scripts and other files referenced by XML manifests inside the addon.
 - Added `/cuf midnight` diagnostics to help verify Midnight restriction and private-aura API state in-game.
 - Reviewed compatibility against `https://github.com/skyking-dev/Cell` and validated the packaged release; in-game verification was not available in this environment.
 
