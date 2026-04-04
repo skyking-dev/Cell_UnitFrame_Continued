@@ -25,6 +25,13 @@ L.proc = L["Proc"]
 L.healPrediction = L["Heal Prediction"]
 L.shieldTexture = L["Shield Texture"]
 L.overshieldTexture = L["Overshield Texture"]
+L.privateAuras = L["Private Auras"] or "Private Auras"
+L["Show countdown swipe"] = L["Show countdown swipe"] or "Show countdown swipe"
+L["Show countdown number"] = L["Show countdown number"] or "Show countdown number"
+L["Max Displayed"] = L["Max Displayed"] or "Max Displayed"
+L["Due to restrictions of the private aura system, this indicator can only use Blizzard style."] =
+    L["Due to restrictions of the private aura system, this indicator can only use Blizzard style."]
+    or "Due to restrictions of the private aura system, this indicator can only use Blizzard style."
 
 -- Aliases
 L.unitFrames = L.UnitFrames

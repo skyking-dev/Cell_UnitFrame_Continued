@@ -187,7 +187,7 @@ CUF:RegisterCallback("LoadPageDB", "unitFramesTab_LoadWidgetList", WidgetsTab.Lo
 function WidgetsTab.UpdateWidgetListEnabled(layout, unit, widgetName, setting)
     if not WidgetsTab:IsShown() then return end
     if not widgetName then return end
-    if not setting == CUF.constants.OPTION_KIND.ENABLED then return end
+    if setting ~= CUF.constants.OPTION_KIND.ENABLED then return end
     if not WidgetsTab.listButtons[widgetName] then return end
 
     if CUF.DB.GetSelectedWidgetTable(widgetName, unit).enabled then

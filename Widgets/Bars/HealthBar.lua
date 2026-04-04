@@ -155,7 +155,7 @@ local function UpdateHealth(button)
         and not Util.HasAnySecretValues(button.states.health, button.states.healthMax) then
         button.widgets.healthBar:SetSmoothedValue(button.states.health)
     else
-        if button.widgets.healthBar.ResetSmoothedValue then
+        if not Cell.isMidnight and button.widgets.healthBar.ResetSmoothedValue then
             button.widgets.healthBar:ResetSmoothedValue()
         end
         button.widgets.healthBar:SetValue(button.states.health)
@@ -190,7 +190,7 @@ local function UpdateHealthMax(button)
         and Util.IsValueNonSecret(healthMax) then
         button.widgets.healthBar:SetMinMaxSmoothedValue(0, healthMax)
     else
-        if button.widgets.healthBar.ResetSmoothedValue then
+        if not Cell.isMidnight and button.widgets.healthBar.ResetSmoothedValue then
             button.widgets.healthBar:ResetSmoothedValue()
         end
         button.widgets.healthBar:SetMinMaxValues(0, healthMax)

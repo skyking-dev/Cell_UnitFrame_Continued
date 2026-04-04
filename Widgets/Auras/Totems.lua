@@ -15,6 +15,7 @@ local menu = CUF.Menu
 local const = CUF.constants
 local DB = CUF.DB
 local P = CUF.PixelPerfect
+local Util = CUF.Util
 
 -- Blizzard has this at 4, but apparently the true max is 5
 local MAX_TOTEMS = 5
@@ -207,10 +208,20 @@ local function Totems_Update(self)
         -- This shouldn't ever be a problem, but if it ever is, it will be nice to stop iteration early
         if haveTotem == nil then break end
 
-        if haveTotem and duration > 0 then
+        local hasReadableTotem = Util.IsValueNonSecret(haveTotem)
+        local hasTotem = hasReadableTotem and haveTotem
+        local hasSecretTotem = not hasReadableTotem
+
+        if hasTotem or hasSecretTotem then
             self.activeTotems = self.activeTotems + 1
 
-            self[self.activeTotems]:SetCooldown(startTime, duration, nil, icon, 1, false)
+            if Util.IsValueNonSecret(startTime) and Util.IsValueNonSecret(duration) and duration > 0 then
+                self[self.activeTotems]:SetCooldown(startTime, duration, nil, icon, 1, false)
+            else
+                -- Midnight secret totems can hide temporal fields; show the icon
+                -- without Lua time math instead of erroring on secret values.
+                self[self.activeTotems]:SetCooldown(0, 0, nil, icon, 1, false)
+            end
             self[self.activeTotems].id = slot
         end
     end

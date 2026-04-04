@@ -548,6 +548,25 @@ Defaults.Widgets = {
             relativePoint = "TOPRIGHT",
         },
     },
+    ---@type PrivateAuraWidgetTable
+    privateAuras = {
+        enabled = false,
+        frameLevel = 10,
+        orientation = CUF.constants.GROWTH_ORIENTATION.LEFT_TO_RIGHT,
+        showCountdownFrame = true,
+        showCountdownNumbers = false,
+        maxIcons = 1,
+        size = {
+            width = 25,
+            height = 25,
+        },
+        position = {
+            point = "BOTTOMLEFT",
+            offsetY = 48,
+            offsetX = 0,
+            relativePoint = "TOPLEFT",
+        },
+    },
     ---@type DispelsWidgetTable
     dispels = {
         enabled = false,
@@ -918,6 +937,14 @@ Defaults.Widgets_Boss.buffs.filter.castByNPC = true
 Defaults.Widgets_Boss.buffs.filter.castByPlayers = true
 Defaults.Widgets_Boss.buffs.maxIcons = 5
 
+Defaults.Widgets_Boss.privateAuras = Util:CopyDeep(Defaults.Widgets.privateAuras)
+Defaults.Widgets_Boss.privateAuras.position = {
+    point = "BOTTOMLEFT",
+    relativePoint = "TOPLEFT",
+    offsetX = 0,
+    offsetY = 36,
+}
+
 Defaults.Widgets_Boss.castBar.position = {
     point = "BOTTOMRIGHT",
     relativePoint = "BOTTOMLEFT",
@@ -1024,6 +1051,7 @@ Defaults.Layouts = {
             customText = Defaults.Widgets.customText,
             buffs = Defaults.Widgets.buffs,
             debuffs = Defaults.Widgets.debuffs,
+            privateAuras = Defaults.Widgets.privateAuras,
             raidIcon = Defaults.Widgets.raidIcon,
             roleIcon = Defaults.Widgets.roleIcon,
             leaderIcon = Defaults.Widgets.leaderIcon,
@@ -1075,6 +1103,7 @@ Defaults.Layouts = {
             customText = Defaults.Widgets.customText,
             buffs = Defaults.Widgets.buffs,
             debuffs = Defaults.Widgets.debuffs,
+            privateAuras = Defaults.Widgets.privateAuras,
             raidIcon = Defaults.Widgets.raidIcon,
             roleIcon = Defaults.Widgets.roleIcon,
             leaderIcon = Defaults.Widgets.leaderIcon,
@@ -1165,6 +1194,7 @@ Defaults.Layouts = {
             customText = Defaults.Widgets.customText,
             buffs = Defaults.Widgets.buffs,
             debuffs = Defaults.Widgets.debuffs,
+            privateAuras = Defaults.Widgets.privateAuras,
             raidIcon = Defaults.Widgets.raidIcon,
             shieldBar = Defaults.Widgets.shieldBar,
             castBar = Defaults.Widgets.castBar,
@@ -1217,6 +1247,7 @@ Defaults.Layouts = {
             shieldBar = Defaults.Widgets.shieldBar,
             buffs = Defaults.Widgets_Boss.buffs,
             debuffs = Defaults.Widgets_Boss.debuffs,
+            privateAuras = Defaults.Widgets_Boss.privateAuras,
             castBar = Defaults.Widgets_Boss.castBar,
             fader = Defaults.Widgets.fader,
             highlight = Defaults.Widgets.highlight,

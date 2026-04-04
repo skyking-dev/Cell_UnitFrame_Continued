@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## v1.0.2 - 2026-04-04
+
+- Added a dedicated Private Auras widget with layout defaults, menu controls, countdown options, and boss-frame support.
+- Improved Midnight aura processing so secret spell data falls back safely for filtering, dispels, player-source checks, and totem displays.
+- Fixed Midnight health and power bar updates so they no longer call `ResetSmoothedValue()` on secret min/max data and trigger `MathUtil.Clamp` errors.
+- Hardened the cast bar against secret `startTime`, `endTime`, and empower hold values by falling back to duration objects whenever Lua time arithmetic is unsafe.
+- Added `/cuf midnight` diagnostics to help verify Midnight restriction and private-aura API state in-game.
+- Tested this release against `https://github.com/skyking-dev/Cell` and confirmed normal operation.
 
 ## v1.0.1 - 2026-04-01
 

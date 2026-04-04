@@ -5,6 +5,7 @@
 ---| HealthTextWidgetTable
 ---| PowerTextWidgetTable
 ---| AuraWidgetTable
+---| PrivateAuraWidgetTable
 ---| RaidIconWidgetTable
 ---| RoleIconWidgetTable
 ---| LeaderIconWidgetTable
@@ -48,6 +49,7 @@
 ---| AltPowerBarWidget
 ---| PowerBarWidget
 ---| HealPredictionWidget
+---| PrivateAurasWidget
 
 ---@class CUFUnitButton.Widgets
 ---@field healthBar HealthBarWidget
@@ -61,6 +63,7 @@
 ---@field healthText HealthTextWidget
 ---@field buffs CellAuraIcons
 ---@field debuffs CellAuraIcons
+---@field privateAuras PrivateAurasWidget
 ---@field raidIcon RaidIconWidget
 ---@field roleIcon RoleIconWidget
 ---@field leaderIcon LeaderIconWidget
@@ -228,6 +231,25 @@
 ---@class AuraFontOpt
 ---@field stacks BigFontOpt
 ---@field duration BigFontOpt
+
+---@class PrivateAuraWidgetTable
+---@field enabled boolean
+---@field frameLevel number
+---@field orientation GrowthOrientation
+---@field showCountdownFrame boolean
+---@field showCountdownNumbers boolean
+---@field maxIcons number
+---@field position PositionOpt
+---@field size SizeOpt
+
+---@class PrivateAurasWidget: Frame, BaseWidget
+---@field _owner CUFUnitButton
+---@field maxAuras number
+---@field unit UnitToken?
+---@field showCountdownFrame boolean
+---@field showCountdownNumbers boolean
+---@field Update fun(self: PrivateAurasWidget, button: CUFUnitButton)
+---@field UpdatePrivateAuraAnchor fun(self: PrivateAurasWidget, unit: UnitToken?)
 
 ---@class DispelsWidgetTable
 ---@field enabled boolean

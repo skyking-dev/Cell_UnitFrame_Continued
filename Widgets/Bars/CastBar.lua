@@ -258,6 +258,30 @@ local function ApplyDurationObject(castBar, unit)
     return true
 end
 
+---@param unit UnitToken
+---@param endTime number?
+---@return number?, boolean
+local function TryAddEmpowerHoldTime(unit, endTime)
+    if not Util.IsValueNonSecret(endTime) then
+        return endTime, false
+    end
+
+    if not GetUnitEmpowerHoldAtMaxTime then
+        return endTime, true
+    end
+
+    local holdTime = GetUnitEmpowerHoldAtMaxTime(unit)
+    if holdTime == nil then
+        return endTime, true
+    end
+
+    if not Util.IsValueNonSecret(holdTime) then
+        return endTime, false
+    end
+
+    return endTime + holdTime, true
+end
+
 ---@param self CastBarWidget
 local function UpdateElements(self)
     self:SetCastBarColor()
@@ -382,8 +406,9 @@ function CastStart(button, event, unit, castGUID)
     castBar.channeling = event == "UNIT_SPELLCAST_CHANNEL_START"
     castBar.empowering = event == "UNIT_SPELLCAST_EMPOWER_START"
 
-    if castBar.empowering and Util.IsValueNonSecret(endTime) then
-        endTime = endTime + GetUnitEmpowerHoldAtMaxTime(unit)
+    local canUseTimeMath = Util.IsValueNonSecret(startTime) and Util.IsValueNonSecret(endTime)
+    if castBar.empowering and canUseTimeMath then
+        endTime, canUseTimeMath = TryAddEmpowerHoldTime(unit, endTime)
     end
 
     castBar:ClearStages()
@@ -402,7 +427,7 @@ function CastStart(button, event, unit, castGUID)
         castBar.castGUID = castGUID
     end
 
-    if Util.IsValueNonSecret(startTime) and Util.IsValueNonSecret(endTime) then
+    if canUseTimeMath then
         castBar._durationObject = nil
         endTime = endTime / 1000
         startTime = startTime / 1000
@@ -463,11 +488,12 @@ function CastUpdate(button, event, unit, castID, spellID)
 
     if name == nil then return end
 
-    if castBar.empowering and Util.IsValueNonSecret(endTime) then
-        endTime = endTime + GetUnitEmpowerHoldAtMaxTime(unit)
+    local canUseTimeMath = Util.IsValueNonSecret(startTime) and Util.IsValueNonSecret(endTime)
+    if castBar.empowering and canUseTimeMath then
+        endTime, canUseTimeMath = TryAddEmpowerHoldTime(unit, endTime)
     end
 
-    if Util.IsValueNonSecret(startTime) and Util.IsValueNonSecret(endTime) then
+    if canUseTimeMath then
         castBar._durationObject = nil
         endTime = endTime / 1000
         startTime = startTime / 1000

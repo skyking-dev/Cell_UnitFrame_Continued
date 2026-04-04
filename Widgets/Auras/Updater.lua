@@ -19,7 +19,7 @@ function W.UpdateAuraWidget(button, unit, which, setting, subSetting, ...)
 
     local styleTable = DB.GetCurrentWidgetTable(which, unit) --[[@as AuraWidgetTable]]
 
-    if not setting or setting == const.AURA_OPTION_KIND.FONT or const.AURA_OPTION_KIND.POSITION then
+    if not setting or setting == const.AURA_OPTION_KIND.FONT or setting == const.AURA_OPTION_KIND.POSITION then
         auras:SetFont(styleTable.font)
     end
     if not setting or setting == const.AURA_OPTION_KIND.ORIENTATION then
@@ -82,9 +82,6 @@ function W.UpdateAuraWidget(button, unit, which, setting, subSetting, ...)
         end
         if not subSetting or subSetting == "nonPersonal" then
             auras:SetNonPersonal(styleTable.filter.nonPersonal)
-        end
-        if not subSetting or subSetting == "personal" then
-            auras:SetPersonal(styleTable.filter.personal)
         end
         if not subSetting or subSetting == "personal" then
             auras:SetPersonal(styleTable.filter.personal)

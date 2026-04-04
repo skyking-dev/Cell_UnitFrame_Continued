@@ -246,7 +246,7 @@ local function UpdatePower(button, event, unit, powerType)
         if not Cell.isMidnight and CellDB["appearance"]["barAnimation"] == "Smooth" and not secretPower then
             powerBar:SetSmoothedValue(power)
         else
-            if powerBar.ResetSmoothedValue then
+            if not Cell.isMidnight and powerBar.ResetSmoothedValue then
                 powerBar:ResetSmoothedValue()
             end
             powerBar:SetValue(power)
@@ -273,7 +273,7 @@ local function UpdatePowerMax(button, event, unit, powerType)
         and Util.IsValueNonSecret(powerMax) then
         powerBar:SetMinMaxSmoothedValue(0, powerMax)
     else
-        if powerBar.ResetSmoothedValue then
+        if not Cell.isMidnight and powerBar.ResetSmoothedValue then
             powerBar:ResetSmoothedValue()
         end
         powerBar:SetMinMaxValues(0, powerMax)

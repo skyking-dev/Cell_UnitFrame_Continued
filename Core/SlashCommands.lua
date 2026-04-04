@@ -1,7 +1,9 @@
 ---@class CUF
 local CUF = select(2, ...)
 
+local Cell = CUF.Cell
 local Debug = CUF.Debug
+local F = Cell and Cell.funcs
 
 SLASH_CUF1 = "/cuf"
 function SlashCmdList.CUF(msg, editbox)
@@ -21,7 +23,7 @@ function SlashCmdList.CUF(msg, editbox)
         CUF.DB.RestoreFromBackup(rest)
     elseif command == "edit" then
         CUF.uFuncs:EditMode()
-    elseif command == "tips" then
+    elseif command == "tips" or command == "resettips" then
         for tip, _ in pairs(CUF_DB.helpTips) do
             CUF.DB.SetHelpTip(tip, false)
         end
@@ -30,15 +32,32 @@ function SlashCmdList.CUF(msg, editbox)
         CUF.widgets:ShowTooltipFrame()
     elseif command == "pixel" then
         CUF:Print(CUF.PixelPerfect.DebugInfo())
+    elseif command == "midnight" then
+        local auraRestricted = F and F.IsAuraRestricted and F.IsAuraRestricted()
+        local cooldownRestricted = F and F.IsCooldownRestricted and F.IsCooldownRestricted()
+        local secretContext = F and F.IsSecretContextActive and F.IsSecretContextActive()
+        local commRestricted = F and F.IsCommRestricted and F.IsCommRestricted()
+        local groupChannel = F and F.GetGroupCommChannel and F.GetGroupCommChannel() or "none"
+        local privateAuraAPI = C_UnitAuras and C_UnitAuras.AddPrivateAuraAnchor and "available" or "missing"
+        CUF:Print(
+            "Midnight diagnostics:\n" ..
+            "Aura restrictions: " .. tostring(auraRestricted) .. "\n" ..
+            "Cooldown restrictions: " .. tostring(cooldownRestricted) .. "\n" ..
+            "Comm restrictions: " .. tostring(commRestricted) .. "\n" ..
+            "Secret context: " .. tostring(secretContext) .. "\n" ..
+            "Group channel: " .. tostring(groupChannel) .. "\n" ..
+            "Private aura API: " .. privateAuraAPI
+        )
     else
         CUF:Print("Available commands:" .. "\n" ..
             "/cuf test - toggle test mode" .. "\n" ..
             "/cuf dev - toggle debug mode" .. "\n" ..
             "/cuf edit - toggle edit mode" .. "\n" ..
             "/cuf restore <automatic|manual> - restore a backup" .. "\n" ..
-            "/cuf resettips - reset all help tips" .. "\n" ..
+            "/cuf tips - reset all help tips" .. "\n" ..
             "/cuf tags - show available tags" .. "\n" ..
-            "/cuf pixel - show pixel debug info"
+            "/cuf pixel - show pixel debug info" .. "\n" ..
+            "/cuf midnight - show Midnight diagnostics"
         )
     end
 end

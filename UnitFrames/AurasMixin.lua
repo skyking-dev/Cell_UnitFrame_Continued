@@ -50,6 +50,22 @@ local function GetSafeBoolean(value)
     end
 end
 
+---@param value any
+---@return number?
+local function GetSafeNumber(value)
+    if type(value) == "number" and Util.IsValueNonSecret(value) then
+        return value
+    end
+end
+
+---@param value any
+---@return string?
+local function GetSafeString(value)
+    if type(value) == "string" and Util.IsValueNonSecret(value) and value ~= "" then
+        return value
+    end
+end
+
 ---@param aura AuraData
 ---@param field string
 ---@param previousAura AuraData?
@@ -65,6 +81,36 @@ local function GetAuraBoolean(aura, field, previousAura)
     end
 
     return false
+end
+
+---@param aura AuraData
+---@param field string
+---@param previousAura AuraData?
+---@return number?
+local function GetAuraNumber(aura, field, previousAura)
+    local value = GetSafeNumber(aura[field])
+    if value ~= nil then
+        return value
+    end
+
+    if previousAura ~= nil and type(previousAura[field]) == "number" then
+        return previousAura[field]
+    end
+end
+
+---@param aura AuraData
+---@param field string
+---@param previousAura AuraData?
+---@return string?
+local function GetAuraString(aura, field, previousAura)
+    local value = GetSafeString(aura[field])
+    if value ~= nil then
+        return value
+    end
+
+    if previousAura ~= nil and type(previousAura[field]) == "string" and previousAura[field] ~= "" then
+        return previousAura[field]
+    end
 end
 
 ---@param unit UnitToken
@@ -154,6 +200,12 @@ local function PrepareAura(aura, unit, previousAura)
         return nil
     end
 
+    aura.name = GetAuraString(aura, "name", previousAura)
+    aura.spellId = GetAuraNumber(aura, "spellId", previousAura)
+    aura.sourceUnit = GetAuraString(aura, "sourceUnit", previousAura)
+    aura.icon = GetAuraNumber(aura, "icon", previousAura) or aura.icon
+    aura.applications = GetAuraNumber(aura, "applications", previousAura) or aura.applications
+
     local spellID = aura.spellId
     aura.isNameplateOnly = GetAuraBoolean(aura, "isNameplateOnly", previousAura)
     aura.isHarmful = GetAuraBoolean(aura, "isHarmful", previousAura)
@@ -174,7 +226,24 @@ local function PrepareAura(aura, unit, previousAura)
         aura.isDispellable = false
     end
 
+    if aura.isFromPlayerOrPlayerPet == false then
+        local sourceUnit = aura.sourceUnit
+        if sourceUnit == "player" or sourceUnit == "pet" then
+            aura.isFromPlayerOrPlayerPet = true
+        end
+    end
+
     return aura
+end
+
+---@param aura AuraData?
+---@return boolean
+local function HasDispelState(aura)
+    if aura == nil then
+        return false
+    end
+
+    return aura.isDispellable == true or (aura.dispelName ~= nil and aura.dispelName ~= "" and aura.dispelName ~= "none")
 end
 
 function AurasMixin:ResetAuraTables()
@@ -208,13 +277,36 @@ local function ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit, filterHint)
     aura.isHelpful = isHelpful
     aura.isHarmful = isHarmful
 
+    if aura.auraInstanceID ~= nil and not aura.isRaid then
+        local raidFilter
+        if isHarmful then
+            raidFilter = "HARMFUL|RAID"
+        elseif isHelpful then
+            raidFilter = "HELPFUL|RAID"
+        end
+
+        if raidFilter ~= nil then
+            local isRaid = MatchesAuraFilter(unit, aura.auraInstanceID, raidFilter)
+            if isRaid ~= nil then
+                aura.isRaid = isRaid
+            end
+        end
+    end
+
     local spellID = aura.spellId
-    if Util.IsValueNonSecret(spellID) then
+    if isHarmful and aura.auraInstanceID ~= nil then
+        local serverDispel = MatchesAuraFilter(unit, aura.auraInstanceID, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+        if serverDispel ~= nil then
+            aura.isDispellable = serverDispel
+        elseif Util.IsValueNonSecret(spellID) then
+            aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, true) or false
+        end
+    elseif Util.IsValueNonSecret(spellID) then
         aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, isHarmful) or false
     end
 
     if isHarmful and not ignoreDebuffs then
-        if aura.dispelName ~= nil and aura.dispelName ~= "" and aura.dispelName ~= "none" then
+        if HasDispelState(aura) then
             return AuraUtil.AuraUpdateChangedType.Dispel
         end
 
@@ -304,11 +396,7 @@ function AurasMixin:UpdateAurasInternal(event, unit, unitAuraUpdateInfo)
                     local previousAura = self._auraDebuffCache[auraInstanceID]
                     local newAura = GetAuraDataByAuraInstanceID(unit, auraInstanceID)
                     newAura = PrepareAura(newAura, unit, previousAura)
-                    if newAura then
-                        dispelsChanged = dispelsChanged or (newAura.dispelName ~= nil and newAura.dispelName ~= "none")
-                    else
-                        dispelsChanged = dispelsChanged or (previousAura.dispelName ~= nil and previousAura.dispelName ~= "none")
-                    end
+                    dispelsChanged = dispelsChanged or HasDispelState(newAura) or HasDispelState(previousAura)
                     self._auraDebuffCache[auraInstanceID] = newAura
                     debuffsChanged = true
                 elseif self._auraBuffCache[auraInstanceID] ~= nil then
@@ -342,8 +430,7 @@ function AurasMixin:UpdateAurasInternal(event, unit, unitAuraUpdateInfo)
         if unitAuraUpdateInfo.removedAuraInstanceIDs ~= nil then
             for _, auraInstanceID in ipairs(unitAuraUpdateInfo.removedAuraInstanceIDs) do
                 if self._auraDebuffCache[auraInstanceID] ~= nil then
-                    local dispelName = self._auraDebuffCache[auraInstanceID].dispelName
-                    dispelsChanged = dispelsChanged or (dispelName ~= nil and dispelName ~= "none")
+                    dispelsChanged = dispelsChanged or HasDispelState(self._auraDebuffCache[auraInstanceID])
                     self._auraDebuffCache[auraInstanceID] = nil
                     debuffsChanged = true
                 elseif self._auraBuffCache[auraInstanceID] ~= nil then

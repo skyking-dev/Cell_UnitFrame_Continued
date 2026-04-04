@@ -69,6 +69,7 @@ Builder.MenuOptions = {
     DetachedAnchor = 42,
     HealPredictionOptions = 43,
     PowerTextAnchorOptions = 44,
+    PrivateAuraOptions = 45,
 }
 
 local FAILED = FAILED or "Failed"
@@ -1595,6 +1596,66 @@ function Builder:CreateAuraFilterOptions(parent, widgetName)
     return f
 end
 
+---@param parent Frame
+---@param widgetName WIDGET_KIND
+---@return PrivateAuraOptions
+function Builder:CreatePrivateAuraOptions(parent, widgetName)
+    ---@class PrivateAuraOptions: OptionsFrame
+    local f = CUF:CreateFrame(nil, parent, 1, 1, true, true)
+    f.id = "PrivateAuraOptions"
+    f.optionHeight = 200
+
+    f.title = self:CreateOptionTitle(f, "privateAuras")
+
+    f.note = f:CreateFontString(nil, "OVERLAY", const.FONTS.CELL_WIDGET)
+    f.note:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -8)
+    f.note:SetWidth(340)
+    f.note:SetJustifyH("LEFT")
+    f.note:SetJustifyV("TOP")
+    f.note:SetWordWrap(true)
+    f.note:SetText("|cffb7b7b7" ..
+        L["Due to restrictions of the private aura system, this indicator can only use Blizzard style."])
+
+    f.anchorOptions = self:CreateAnchorOptions(f, widgetName)
+    self:AnchorBelow(f.anchorOptions, f.note)
+
+    f.extraAnchorDropdown = self:CreateExtraAnchorOptions(f, widgetName)
+    self:AnchorBelow(f.extraAnchorDropdown, f.anchorOptions)
+
+    f.orientationDropdown = self:CreateOrientationOptions(f, widgetName)
+    self:AnchorRight(f.orientationDropdown, f.extraAnchorDropdown)
+
+    f.sizeOptions = self:CreateSingleSizeOptions(f, widgetName)
+    self:AnchorBelow(f.sizeOptions, f.extraAnchorDropdown)
+
+    f.maxIconsSlider = self:CreateSlider(f, widgetName, L["Max Displayed"], nil, 1, 5,
+        const.AURA_OPTION_KIND.MAX_ICONS)
+    self:AnchorRight(f.maxIconsSlider, f.sizeOptions)
+
+    f.showCountdownFrame = self:CreateCheckBox(f, widgetName, L["Show countdown swipe"],
+        const.AURA_OPTION_KIND.SHOW_COUNTDOWN_FRAME)
+    self:AnchorBelowCB(f.showCountdownFrame, f.sizeOptions)
+
+    f.showCountdownNumbers = self:CreateCheckBox(f, widgetName, L["Show countdown number"],
+        const.AURA_OPTION_KIND.SHOW_COUNTDOWN_NUMBERS)
+    self:AnchorRightOfCB(f.showCountdownNumbers, f.showCountdownFrame)
+
+    local previousOnClick = f.showCountdownFrame.onClick
+    f.showCountdownFrame.onClick = function(checked, cb)
+        if previousOnClick then
+            previousOnClick(checked, cb)
+        end
+        f.showCountdownNumbers:SetEnabled(checked)
+    end
+
+    local function LoadPageDB()
+        f.showCountdownNumbers:SetEnabled(f.showCountdownFrame:GetChecked())
+    end
+    Handler:RegisterOption(LoadPageDB, widgetName, "PrivateAuraOptions")
+
+    return f
+end
+
 -------------------------------------------------
 -- MARK: Aura Black-/whitelist
 -------------------------------------------------
@@ -2422,4 +2483,5 @@ Builder.MenuFuncs = {
     [Builder.MenuOptions.PowerBar] = Builder.CreatePowerBarOptions,
     [Builder.MenuOptions.HealPredictionOptions] = Builder.CreateHealPredictionOptions,
     [Builder.MenuOptions.PowerTextAnchorOptions] = Builder.CreatePowerTextAnchorOptions,
+    [Builder.MenuOptions.PrivateAuraOptions] = Builder.CreatePrivateAuraOptions,
 }

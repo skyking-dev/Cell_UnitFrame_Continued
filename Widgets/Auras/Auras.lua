@@ -21,6 +21,77 @@ local tinsert = table.insert
 local wipe = table.wipe
 local ceil = math.ceil
 
+---@param icon CellAuraIcon
+---@return Cooldown?
+local function GetMidnightCountdownFrame(icon)
+    if icon._midnightCooldown and icon._midnightCooldown.GetCountdownFontString then
+        return icon._midnightCooldown
+    end
+
+    if icon._countdownCooldown and icon._countdownCooldown.GetCountdownFontString then
+        return icon._countdownCooldown
+    end
+
+    if icon.cooldown and icon.cooldown.GetCountdownFontString then
+        return icon.cooldown
+    end
+end
+
+---@param icon CellAuraIcon
+local function ApplyMidnightCountdownFont(icon)
+    local countdown = GetMidnightCountdownFrame(icon)
+    if not countdown or not countdown.GetCountdownFontString then return end
+
+    if countdown.SetCountdownAbbrevThreshold then
+        countdown:SetCountdownAbbrevThreshold(60)
+    end
+
+    local cdText = countdown:GetCountdownFontString()
+    if not cdText then return end
+
+    cdText:ClearAllPoints()
+    cdText:SetPoint("CENTER", countdown, "CENTER", 0, 0)
+
+    local font = icon._durationFont
+    if font then
+        local fontFace = F.GetFont(font[1]) or cdText:GetFont()
+        local fontSize = font[2] or 11
+        local outline = font[3]
+        local flags = outline == "Outline" and "OUTLINE"
+            or outline == "Monochrome" and "OUTLINE,MONOCHROME"
+            or ""
+        cdText:SetFont(fontFace, fontSize, flags)
+        if type(font[8]) == "table" then
+            cdText:SetTextColor(font[8][1], font[8][2], font[8][3])
+        end
+        if font[4] then
+            cdText:SetShadowOffset(1, -1)
+        else
+            cdText:SetShadowOffset(0, 0)
+        end
+    else
+        local fontFace = cdText:GetFont()
+        cdText:SetFont(fontFace, 11, "OUTLINE")
+    end
+end
+
+---@param icon CellAuraIcon
+---@param show boolean
+local function SetMidnightCountdownVisibility(icon, show)
+    local countdown = GetMidnightCountdownFrame(icon)
+    if countdown and countdown.SetHideCountdownNumbers then
+        countdown:SetHideCountdownNumbers(not show)
+    end
+end
+
+---@param icon CellAuraIcon
+local function HideMidnightCountdown(icon)
+    SetMidnightCountdownVisibility(icon, false)
+    if icon._midnightCooldown then
+        icon._midnightCooldown:Hide()
+    end
+end
+
 ---@param value any
 ---@return number?
 local function GetSafeNumber(value)
@@ -83,6 +154,9 @@ local function Icons_SetFont(icons, fonts)
         icons[i]:SetFont(
             { fs.style, fs.size, fs.outline, fs.shadow, fs.point, fs.offsetX, fs.offsetY, fs.rgb },
             { fd.style, fd.size, fd.outline, fd.shadow, fd.point, fd.offsetX, fd.offsetY, fd.rgb })
+        if Cell.isMidnight then
+            ApplyMidnightCountdownFont(icons[i])
+        end
     end
 end
 
@@ -243,6 +317,12 @@ local function Icons_ShowDuration(icons, show)
     for _, icon in ipairs(icons) do
         icon._showDuration = show
         icon.duration:SetShown(show)
+        if Cell.isMidnight then
+            SetMidnightCountdownVisibility(icon, show and true or false)
+            if show then
+                ApplyMidnightCountdownFont(icon)
+            end
+        end
     end
 end
 
@@ -422,10 +502,14 @@ local function CheckFilter(icon, auraData)
 
     -- Personal / Non-Personal Check
     local sourceUnit = GetSafeString(auraData.sourceUnit)
+    local fromPlayer = GetSafeBoolean(auraData.isFromPlayerOrPlayerPet)
     if sourceUnit ~= nil then
         if icon.nonPersonal and sourceUnit ~= "player" then return true end
         if icon.personal and sourceUnit == "player" then return true end
         if icon.castByNPC and sourceUnit == "npc" then return true end
+    elseif fromPlayer ~= nil then
+        if icon.personal and fromPlayer then return true end
+        if icon.nonPersonal and not fromPlayer then return true end
     elseif icon.personal and icon.nonPersonal then
         return true
     end
@@ -433,7 +517,7 @@ local function CheckFilter(icon, auraData)
     -- Source Unit Check
     if icon.boss and GetSafeBoolean(auraData.isBossAura) then return true end
     if icon.raid and GetSafeBoolean(auraData.isRaid) then return true end
-    if icon.castByPlayers and GetSafeBoolean(auraData.isFromPlayerOrPlayerPet) then return true end
+    if icon.castByPlayers and fromPlayer then return true end
 
     return false
 end
@@ -608,42 +692,58 @@ local function UpdateAuraIcons(icons)
         local expirationTime = GetSafeNumber(auraData.expirationTime)
         local applications = GetSafeNumber(auraData.applications) or 0
         local startTime = 0
+        local canUseLuaTimeMath = expirationTime ~= nil and duration > 0
 
-        if expirationTime ~= nil and duration > 0 then
+        if canUseLuaTimeMath then
             startTime = expirationTime - duration
         else
             duration = 0
         end
 
         icons._auraCount = icons._auraCount + 1
-        icons[icons._auraCount]:SetCooldown(
-            startTime,
-            duration,
-            dispelType,
-            auraData.icon,
-            applications,
-            auraData.refreshing
-        )
+        local iconFrame = icons[icons._auraCount]
+        local usedDurationObject = false
+        if Cell.isMidnight and not canUseLuaTimeMath and not auraData.isTempEnchant
+            and auraInstanceID > 0 and iconFrame.SetCooldownFromAura then
+            iconFrame:SetCooldownFromAura(icons._owner.states.displayedUnit, auraInstanceID, auraData.icon, auraData.refreshing)
+            SetMidnightCountdownVisibility(iconFrame, iconFrame._showDuration and true or false)
+            if iconFrame._showDuration then
+                ApplyMidnightCountdownFont(iconFrame)
+            end
+            usedDurationObject = true
+        else
+            if Cell.isMidnight then
+                HideMidnightCountdown(iconFrame)
+            end
+            iconFrame:SetCooldown(
+                startTime,
+                duration,
+                dispelType,
+                auraData.icon,
+                applications,
+                auraData.refreshing
+            )
+        end
 
-        if expirationTime == nil or duration == 0 then
-            icons[icons._auraCount]:SetScript("OnUpdate", nil)
-            icons[icons._auraCount].duration:SetText("")
+        if not usedDurationObject and (expirationTime == nil or duration == 0) then
+            iconFrame:SetScript("OnUpdate", nil)
+            iconFrame.duration:SetText("")
         end
         if applications == 0 then
-            icons[icons._auraCount].stack:SetText("")
+            iconFrame.stack:SetText("")
         end
 
         -- Tooltip
         ---@diagnostic disable-next-line: undefined-field
         if auraData.isTempEnchant then
-            icons[icons._auraCount].auraInstanceID = math.abs(auraInstanceID)
-            icons[icons._auraCount].isTempEnchant = true
+            iconFrame.auraInstanceID = math.abs(auraInstanceID)
+            iconFrame.isTempEnchant = true
         else
-            icons[icons._auraCount].auraInstanceID = auraInstanceID
-            icons[icons._auraCount].isTempEnchant = false
+            iconFrame.auraInstanceID = auraInstanceID
+            iconFrame.isTempEnchant = false
         end
 
-        icons[icons._auraCount]:PostUpdate(auraData)
+        iconFrame:PostUpdate(auraData)
     end
 
     -- Resize

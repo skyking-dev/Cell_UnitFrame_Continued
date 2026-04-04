@@ -106,6 +106,7 @@ const.WIDGET_KIND = {
     CUSTOM_TEXT = "customText",
     BUFFS = "buffs",
     DEBUFFS = "debuffs",
+    PRIVATE_AURAS = "privateAuras",
     RAID_ICON = "raidIcon",
     ROLE_ICON = "roleIcon",
     LEADER_ICON = "leaderIcon",
@@ -257,6 +258,8 @@ const.AURA_OPTION_KIND = {
     DISPELLABLE = "dispellable",
     RAID = "raid",
     CELL_RAID_DEBUFFS = "cellRaidDebuffs",
+    SHOW_COUNTDOWN_FRAME = "showCountdownFrame",
+    SHOW_COUNTDOWN_NUMBERS = "showCountdownNumbers",
 }
 
 ---@enum GrowthOrientation

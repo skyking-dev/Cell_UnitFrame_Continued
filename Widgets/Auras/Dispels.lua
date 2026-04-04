@@ -19,6 +19,7 @@ local Util = CUF.Util
 local UnitIsFriend = UnitIsFriend
 local UnitCanAttack = UnitCanAttack
 local tinsert = table.insert
+local SECRET_DISPEL_FALLBACK_TYPE = "Magic"
 
 local function GetDebuffTypeColor(type)
     if type == "Enrage" then
@@ -125,12 +126,16 @@ local function Update(button, buffsChanged, debuffsChanged, dispelsChanged, full
     local type = isFriend and "debuffs" or "buffs"
 
     button:IterateAuras(type, function(aura)
-        if not dispels:ShouldShowDispel(aura.dispelName, aura.isDispellable) then return end
+        local dispelType = aura.dispelName
+        if (dispelType == nil or dispelType == "") and aura.isDispellable then
+            dispelType = SECRET_DISPEL_FALLBACK_TYPE
+        end
+        if not dispels:ShouldShowDispel(dispelType, aura.isDispellable) then return end
         foundDispel = true
 
-        dispels:SetDispelHighlight(aura.dispelName)
-        dispels:SetDispelIcon(aura.dispelName)
-        dispels:SetDispelGlow(aura.dispelName)
+        dispels:SetDispelHighlight(dispelType)
+        dispels:SetDispelIcon(dispelType)
+        dispels:SetDispelGlow(dispelType)
         dispels:Show()
 
         return true
@@ -178,6 +183,7 @@ end
 local function ShouldShowDispel(self, dispelType, isDispellable)
     if dispelType == "none" then return false end
     if self.onlyShowDispellable and not isDispellable then return false end
+    if not dispelType or dispelType == "" then return false end
 
     return self.dispelTypes[dispelType]
 end

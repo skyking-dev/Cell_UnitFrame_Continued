@@ -8,6 +8,7 @@ local DB = CUF.DB
 
 local L = CUF.L
 local Util = CUF.Util
+local Defaults = CUF.Defaults
 
 local changelog = {}
 local function AddToChangelog(text)
@@ -309,6 +310,37 @@ function DB:Revise()
             layout.widgets.healPrediction = nil
             layout.widgets.healAbsorb = nil
         end)
+    end
+    if CUF_DB.version < 28 then
+        Util.IterateAllUnitLayouts(function(layout, unit)
+            if not layout.widgets then return end
+
+            if layout.widgets.buffs and not layout.widgets.privateAuras then
+                if unit == CUF.constants.UNIT.BOSS then
+                    layout.widgets.privateAuras = Util:CopyDeep(Defaults.Widgets_Boss.privateAuras)
+                else
+                    layout.widgets.privateAuras = Util:CopyDeep(Defaults.Widgets.privateAuras)
+                end
+            end
+
+            if layout.widgets.privateAuras then
+                local privateAuras = layout.widgets.privateAuras
+                privateAuras.maxIcons = math.min(5, math.max(1, tonumber(privateAuras.maxIcons) or 1))
+                if privateAuras.showCountdownFrame == nil then
+                    privateAuras.showCountdownFrame = true
+                end
+                if privateAuras.showCountdownNumbers == nil then
+                    privateAuras.showCountdownNumbers = false
+                end
+                if privateAuras.position and privateAuras.position.point and not privateAuras.position.relativePoint then
+                    privateAuras.position.relativePoint = privateAuras.position.point
+                end
+            end
+        end)
+
+        AddToChangelog("Added a dedicated Private Auras widget for player-oriented unit frames.")
+        AddToChangelog("Aura icons now fall back to Blizzard duration objects when Midnight hides Lua timing data.")
+        AddToChangelog("Dispel detection now uses server-side aura filters when Midnight secret values hide spell details.")
     end
 
     ShowChangelog()
