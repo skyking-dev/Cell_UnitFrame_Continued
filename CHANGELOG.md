@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.3 - 2026-04-16
+
+- Improved Midnight dispel handling so secret dispel colors can still drive highlights and icons when spell details are hidden.
+- Improved aura source filtering by falling back to server-side player filters when source unit data is unavailable.
+- Replaced name format widget options with a max character limit for name text and migrated existing layouts automatically.
+
 ## v1.0.2 - 2026-04-04
 
 - Added a dedicated Private Auras widget with layout defaults, menu controls, countdown options, and boss-frame support.

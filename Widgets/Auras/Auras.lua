@@ -21,6 +21,21 @@ local tinsert = table.insert
 local wipe = table.wipe
 local ceil = math.ceil
 
+---@param sourceUnit string?
+---@param fromPlayer boolean?
+---@return boolean?
+local function IsPersonalAuraSource(sourceUnit, fromPlayer)
+    if fromPlayer ~= nil then
+        return fromPlayer
+    end
+
+    if sourceUnit == nil then
+        return nil
+    end
+
+    return sourceUnit == "player" or sourceUnit == "pet"
+end
+
 ---@param icon CellAuraIcon
 ---@return Cooldown?
 local function GetMidnightCountdownFrame(icon)
@@ -503,13 +518,10 @@ local function CheckFilter(icon, auraData)
     -- Personal / Non-Personal Check
     local sourceUnit = GetSafeString(auraData.sourceUnit)
     local fromPlayer = GetSafeBoolean(auraData.isFromPlayerOrPlayerPet)
-    if sourceUnit ~= nil then
-        if icon.nonPersonal and sourceUnit ~= "player" then return true end
-        if icon.personal and sourceUnit == "player" then return true end
-        if icon.castByNPC and sourceUnit == "npc" then return true end
-    elseif fromPlayer ~= nil then
-        if icon.personal and fromPlayer then return true end
-        if icon.nonPersonal and not fromPlayer then return true end
+    local isPersonal = IsPersonalAuraSource(sourceUnit, fromPlayer)
+    if isPersonal ~= nil then
+        if icon.personal and isPersonal then return true end
+        if icon.nonPersonal and not isPersonal then return true end
     elseif icon.personal and icon.nonPersonal then
         return true
     end
@@ -517,7 +529,8 @@ local function CheckFilter(icon, auraData)
     -- Source Unit Check
     if icon.boss and GetSafeBoolean(auraData.isBossAura) then return true end
     if icon.raid and GetSafeBoolean(auraData.isRaid) then return true end
-    if icon.castByPlayers and fromPlayer then return true end
+    if icon.castByPlayers and isPersonal then return true end
+    if icon.castByNPC and sourceUnit == "npc" then return true end
 
     return false
 end

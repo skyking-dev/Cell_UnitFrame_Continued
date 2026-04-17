@@ -53,7 +53,7 @@ Builder.MenuOptions = {
     CastBarEmpower = 26,
     CastBarBorder = 27,
     CastBarIcon = 28,
-    NameFormat = 29,
+    NameLength = 29,
     ShieldBarOptions = 30,
     CustomText = 31,
     DispelsOptions = 32,
@@ -1013,29 +1013,22 @@ function Builder:CreatePowerFormatOptions(parent, widgetName)
 end
 
 -------------------------------------------------
--- MARK: Name Format
+-- MARK: Name Length
 -------------------------------------------------
 
 ---@param parent Frame
 ---@param widgetName WIDGET_KIND
----@return NameFormatOptions
-function Builder:CreateNameFormatOptions(parent, widgetName)
-    ---@class NameFormatOptions: OptionsFrame
+---@return NameLengthOptions
+function Builder:CreateNameLengthOptions(parent, widgetName)
+    ---@class NameLengthOptions: OptionsFrame
     local f = CUF:CreateFrame(nil, parent, 1, 1, true, true)
     f.optionHeight = 20
-    f.id = "NameFormatOptions"
+    f.id = "NameLengthOptions"
 
-    local tooltips = {}
-    for _, format in ipairs(const.NameFormatArray) do
-        local tooltip = L[format] .. ": " .. L[format .. "_Example"]
-        table.insert(tooltips, tooltip)
-    end
-
-    f.formatDropdown = self:CreateDropdown(f, widgetName, "Format", 200, const.NameFormatArray,
-        const.OPTION_KIND.FORMAT)
-    f.formatDropdown:SetPoint("TOPLEFT", f)
-
-    Cell.SetTooltips(f.formatDropdown, "ANCHOR_TOPLEFT", 0, 3, L.NameFormats, unpack(tooltips))
+    f.maxLengthSlider = self:CreateSlider(f, widgetName, L.MaxCharacters, 200, 0, 50,
+        const.OPTION_KIND.MAX_LENGTH)
+    f.maxLengthSlider:SetPoint("TOPLEFT", f)
+    CUF:SetTooltips(f.maxLengthSlider, "ANCHOR_TOPLEFT", 0, 3, L.MaxCharacters, L.MaxCharactersTooltip)
 
     return f
 end
@@ -2449,7 +2442,7 @@ Builder.MenuFuncs = {
     [Builder.MenuOptions.Font] = Builder.CreateFontOptions,
     [Builder.MenuOptions.HealthFormat] = Builder.CreateHealthFormatOptions,
     [Builder.MenuOptions.PowerFormat] = Builder.CreatePowerFormatOptions,
-    [Builder.MenuOptions.NameFormat] = Builder.CreateNameFormatOptions,
+    [Builder.MenuOptions.NameLength] = Builder.CreateNameLengthOptions,
     [Builder.MenuOptions.AuraIconOptions] = Builder.CreateAuraIconOptions,
     [Builder.MenuOptions.Orientation] = Builder.CreateOrientationOptions,
     [Builder.MenuOptions.AuraStackFontOptions] = Builder.CreateAuraStackFontOptions,

@@ -102,7 +102,7 @@
 ---@field color ColorOpt
 ---@field width FontWidthOpt
 ---@field position PositionOpt
----@field format NameFormat
+---@field maxLength number
 
 ---@class HealthTextWidgetTable
 ---@field enabled boolean

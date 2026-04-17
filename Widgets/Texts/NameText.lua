@@ -27,7 +27,7 @@ end
 menu:AddWidget(const.WIDGET_KIND.NAME_TEXT,
     Builder.MenuOptions.TextColor,
     Builder.MenuOptions.TextWidth,
-    Builder.MenuOptions.NameFormat,
+    Builder.MenuOptions.NameLength,
     Builder.MenuOptions.FullAnchor,
     Builder.MenuOptions.Font,
     Builder.MenuOptions.FrameLevel)
@@ -43,8 +43,8 @@ function W.UpdateNameTextWidget(button, unit, setting, subSetting)
     if not setting or setting == const.OPTION_KIND.WIDTH then
         widget.width = styleTable.width
     end
-    if not setting or setting == const.OPTION_KIND.FORMAT then
-        widget.format = styleTable.format
+    if not setting or setting == const.OPTION_KIND.MAX_LENGTH then
+        widget.maxLength = styleTable.maxLength
     end
 
     widget.Update(button)
@@ -104,10 +104,16 @@ function W:CreateNameText(button)
     button.widgets.nameText = nameText
 
     nameText.width = CUF.Defaults.Options.fontWidth
-    nameText.format = CUF.Defaults.Widgets.nameText.format
+    nameText.maxLength = CUF.Defaults.Widgets.nameText.maxLength
 
     function nameText:UpdateName()
-        local name = Util:GetDisplayName(button.states.name, button.states.fullName, self.format, button.__unitName)
+        local maxLength = self.maxLength
+        if type(maxLength) ~= "number" or maxLength <= 0 then
+            maxLength = nil
+        end
+
+        local name = Util:GetDisplayName(button.states.name, button.states.fullName, nil, button.__unitName,
+            maxLength)
 
         if name == nil then
             self:SetText("")
@@ -126,7 +132,6 @@ function W:CreateNameText(button)
     nameText.Enable = Enable
     nameText.Disable = Disable
 
-    nameText.FormatName = Util.FormatName
     nameText.UpdateTextWidth = Util.UpdateTextWidth
 end
 

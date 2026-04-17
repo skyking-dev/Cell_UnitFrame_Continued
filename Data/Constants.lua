@@ -4,17 +4,6 @@ local CUF = select(2, ...)
 ---@class CUF.constants
 local const = CUF.constants
 
-local Util = CUF.Util
-
---- Called when the addon is loaded
----
---- Used for initializing constants that require Util functions
-local function OnAddonLoaded()
-    const.NameFormatArray = Util.DictionaryToArray(const.NameFormat)
-end
-
-CUF:RegisterCallback("AddonLoaded", "CUF_Constants_OnAddonLoaded", OnAddonLoaded)
-
 ---@enum Unit
 const.UNIT = {
     PLAYER = "player",
@@ -217,7 +206,8 @@ const.OPTION_KIND = {
     FADE_OUT_TIMER            = "fadeOutTimer",
     ENRAGE                    = "enrage",
     OVER_HEAL                 = "overHeal",
-    ANCHOR_TO_POWER_BAR       = "anchorToPowerBar"
+    ANCHOR_TO_POWER_BAR       = "anchorToPowerBar",
+    MAX_LENGTH                = "maxLength"
 }
 
 ---@enum AURA_OPTION_KIND

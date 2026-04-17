@@ -342,6 +342,18 @@ function DB:Revise()
         AddToChangelog("Aura icons now fall back to Blizzard duration objects when Midnight hides Lua timing data.")
         AddToChangelog("Dispel detection now uses server-side aura filters when Midnight secret values hide spell details.")
     end
+    if CUF_DB.version < 29 then
+        Util.IterateAllUnitLayouts(function(layout)
+            if not layout.widgets or not layout.widgets.nameText then return end
+
+            layout.widgets.nameText.format = nil
+            if layout.widgets.nameText.maxLength == nil then
+                layout.widgets.nameText.maxLength = Defaults.Widgets.nameText.maxLength
+            end
+        end)
+
+        AddToChangelog("Removed name format options and added a character limit option for name text.")
+    end
 
     ShowChangelog()
 end

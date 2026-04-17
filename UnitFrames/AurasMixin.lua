@@ -29,7 +29,7 @@ AurasMixin._ignoreBuffs = true
 AurasMixin._ignoreDebuffs = true
 
 ---@param dispelName string?
----@param spellID number
+---@param spellID number?
 ---@return string
 local function CheckDebuffType(dispelName, spellID)
     if not LibDispel then
@@ -41,6 +41,7 @@ end
 
 local HELPFUL_FILTER = AuraUtil.AuraFilters.Helpful or "HELPFUL"
 local HARMFUL_FILTER = AuraUtil.AuraFilters.Harmful or "HARMFUL"
+local PLAYER_FILTER = AuraUtil.AuraFilters.Player or "PLAYER"
 
 ---@param value any
 ---@return boolean?
@@ -214,15 +215,17 @@ local function PrepareAura(aura, unit, previousAura)
     aura.isRaid = GetAuraBoolean(aura, "isRaid", previousAura)
     aura.isFromPlayerOrPlayerPet = GetAuraBoolean(aura, "isFromPlayerOrPlayerPet", previousAura)
 
-    if Util.IsValueNonSecret(spellID) then
-        local dispelName = Util.IsValueNonSecret(aura.dispelName) and aura.dispelName or nil
+    local rawDispelName = aura.dispelName
+    local dispelName = Util.IsValueNonSecret(rawDispelName) and rawDispelName or nil
+    aura._secretDispelName = rawDispelName ~= nil and dispelName == nil
+    if spellID ~= nil or dispelName ~= nil then
         aura.dispelName = CheckDebuffType(dispelName, spellID)
         aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, aura.isHarmful) or false
     elseif previousAura then
         aura.dispelName = previousAura.dispelName
         aura.isDispellable = previousAura.isDispellable
     else
-        aura.dispelName = Util.IsValueNonSecret(aura.dispelName) and aura.dispelName or nil
+        aura.dispelName = dispelName
         aura.isDispellable = false
     end
 
@@ -238,12 +241,22 @@ end
 
 ---@param aura AuraData?
 ---@return boolean
+local function HasKnownDispelType(aura)
+    if aura == nil then
+        return false
+    end
+
+    return aura.dispelName ~= nil and aura.dispelName ~= "" and aura.dispelName ~= "none"
+end
+
+---@param aura AuraData?
+---@return boolean
 local function HasDispelState(aura)
     if aura == nil then
         return false
     end
 
-    return aura.isDispellable == true or (aura.dispelName ~= nil and aura.dispelName ~= "" and aura.dispelName ~= "none")
+    return aura.isDispellable == true or HasKnownDispelType(aura)
 end
 
 function AurasMixin:ResetAuraTables()
@@ -293,16 +306,40 @@ local function ProcessAura(aura, ignoreBuffs, ignoreDebuffs, unit, filterHint)
         end
     end
 
-    local spellID = aura.spellId
-    if isHarmful and aura.auraInstanceID ~= nil then
-        local serverDispel = MatchesAuraFilter(unit, aura.auraInstanceID, "HARMFUL|RAID_PLAYER_DISPELLABLE")
-        if serverDispel ~= nil then
-            aura.isDispellable = serverDispel
-        elseif Util.IsValueNonSecret(spellID) then
-            aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, true) or false
+    if aura.auraInstanceID ~= nil and not aura.isFromPlayerOrPlayerPet then
+        local playerFilter
+        if isHarmful then
+            playerFilter = HARMFUL_FILTER .. "|" .. PLAYER_FILTER
+        elseif isHelpful then
+            playerFilter = HELPFUL_FILTER .. "|" .. PLAYER_FILTER
         end
-    elseif Util.IsValueNonSecret(spellID) then
-        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, isHarmful) or false
+
+        if playerFilter ~= nil then
+            local isFromPlayer = MatchesAuraFilter(unit, aura.auraInstanceID, playerFilter)
+            if isFromPlayer ~= nil then
+                aura.isFromPlayerOrPlayerPet = isFromPlayer
+            end
+        end
+    end
+
+    local spellID = aura.spellId
+    local hasKnownSpellID = spellID ~= nil
+    local hasKnownDispelType = HasKnownDispelType(aura)
+    if isHarmful then
+        if hasKnownSpellID or hasKnownDispelType then
+            aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, true) or false
+        elseif aura.auraInstanceID ~= nil then
+            local serverDispel = MatchesAuraFilter(unit, aura.auraInstanceID, "HARMFUL|RAID_PLAYER_DISPELLABLE")
+            if serverDispel ~= nil then
+                aura.isDispellable = serverDispel
+            elseif aura._secretDispelName then
+                aura.isDispellable = true
+            end
+        elseif aura._secretDispelName then
+            aura.isDispellable = true
+        end
+    elseif hasKnownSpellID or hasKnownDispelType then
+        aura.isDispellable = LibDispel and LibDispel:IsDispelable(unit, spellID, aura.dispelName, false) or false
     end
 
     if isHarmful and not ignoreDebuffs then

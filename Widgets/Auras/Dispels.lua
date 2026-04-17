@@ -19,13 +19,61 @@ local Util = CUF.Util
 local UnitIsFriend = UnitIsFriend
 local UnitCanAttack = UnitCanAttack
 local tinsert = table.insert
-local SECRET_DISPEL_FALLBACK_TYPE = "Magic"
+local GetAuraDispelTypeColor = C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor
 
 local function GetDebuffTypeColor(type)
     if type == "Enrage" then
         return 0.05, 0.85, 0.94
     end
     return I.GetDebuffTypeColor(type)
+end
+
+local SecretDispelTypes = {
+    { name = "Magic", idx = 1, nextIdx = 2 },
+    { name = "Curse", idx = 2, nextIdx = 3 },
+    { name = "Disease", idx = 3, nextIdx = 4 },
+    { name = "Poison", idx = 4, nextIdx = 5 },
+    { name = "Enrage", idx = 9, nextIdx = 10 },
+    { name = "Bleed", idx = 11 },
+}
+
+local secretDispelCurvesReady = false
+local secretDispelHighlightCurve
+local secretDispelBracketCurves = {}
+
+if C_CurveUtil and C_CurveUtil.CreateColorCurve and GetAuraDispelTypeColor
+    and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step then
+    local stepType = Enum.LuaCurveType.Step
+    local transparent = CreateColor(0, 0, 0, 0)
+
+    secretDispelHighlightCurve = C_CurveUtil.CreateColorCurve()
+    secretDispelHighlightCurve:SetType(stepType)
+    secretDispelHighlightCurve:AddPoint(0, transparent)
+
+    for _, typeInfo in ipairs(SecretDispelTypes) do
+        local r, g, b = GetDebuffTypeColor(typeInfo.name)
+        secretDispelHighlightCurve:AddPoint(typeInfo.idx, CreateColor(r, g, b, 1))
+
+        local bracketCurve = C_CurveUtil.CreateColorCurve()
+        bracketCurve:SetType(stepType)
+        bracketCurve:AddPoint(0, transparent)
+        bracketCurve:AddPoint(typeInfo.idx, CreateColor(r, g, b, 1))
+        if typeInfo.nextIdx then
+            bracketCurve:AddPoint(typeInfo.nextIdx, transparent)
+        end
+        secretDispelBracketCurves[typeInfo.name] = bracketCurve
+    end
+
+    secretDispelCurvesReady = true
+end
+
+---@param unit UnitToken?
+---@param auraInstanceID number?
+---@param curve any
+---@return ColorMixin?
+local function GetSecretDispelColor(unit, auraInstanceID, curve)
+    if not secretDispelCurvesReady or not unit or not auraInstanceID or not curve then return end
+    return GetAuraDispelTypeColor(unit, auraInstanceID, curve)
 end
 
 -------------------------------------------------
@@ -125,12 +173,18 @@ local function Update(button, buffsChanged, debuffsChanged, dispelsChanged, full
 
     local type = isFriend and "debuffs" or "buffs"
 
+    local unit = button.states.displayedUnit or button.states.unit
     button:IterateAuras(type, function(aura)
         local dispelType = aura.dispelName
-        if (dispelType == nil or dispelType == "") and aura.isDispellable then
-            dispelType = SECRET_DISPEL_FALLBACK_TYPE
+        if not dispels:ShouldShowDispel(dispelType, aura.isDispellable) then
+            if (dispelType == nil or dispelType == "") and aura.isDispellable
+                and dispels:ShowSecretDispel(unit, aura.auraInstanceID) then
+                foundDispel = true
+                dispels:Show()
+                return true
+            end
+            return
         end
-        if not dispels:ShouldShowDispel(dispelType, aura.isDispellable) then return end
         foundDispel = true
 
         dispels:SetDispelHighlight(dispelType)
@@ -142,18 +196,7 @@ local function Update(button, buffsChanged, debuffsChanged, dispelsChanged, full
     end)
 
     if not foundDispel then
-        if dispels.activeIconType then
-            dispels.icons[dispels.activeIconType]:Hide()
-        end
-        if dispels.activeGlowType then
-            Util.GlowStop(dispels.glowLayer)
-        end
-
-        dispels.activeType = nil
-        dispels.activeIconType = nil
-        dispels.activeGlowType = nil
-
-        dispels:Hide()
+        dispels:ClearDispel()
         return
     end
 end
@@ -189,8 +232,131 @@ local function ShouldShowDispel(self, dispelType, isDispellable)
 end
 
 ---@param self DispelsWidget
+local function ResetSecretDispel(self)
+    if not self.secretDispelActive then return end
+
+    if self.secretGradientOverlay then
+        self.secretGradientOverlay:Hide()
+    end
+    for _, icon in pairs(self.icons) do
+        icon:SetAlpha(1)
+        icon:Hide()
+    end
+
+    self.secretDispelActive = false
+end
+
+---@param self DispelsWidget
+local function ClearDispel(self)
+    ResetSecretDispel(self)
+
+    if self.activeIconType then
+        self.icons[self.activeIconType]:Hide()
+    end
+    if self.activeGlowType then
+        Util.GlowStop(self.glowLayer)
+    end
+
+    self.activeType = nil
+    self.activeIconType = nil
+    self.activeGlowType = nil
+
+    self:Hide()
+end
+
+---@param self DispelsWidget
+---@return boolean
+local function ShouldShowSecretDispel(self)
+    if not secretDispelCurvesReady then return false end
+
+    for _, typeInfo in ipairs(SecretDispelTypes) do
+        if self.dispelTypes[typeInfo.name] then
+            return true
+        end
+    end
+
+    return false
+end
+
+---@param self DispelsWidget
+---@return Texture
+local function EnsureSecretGradientOverlay(self)
+    if self.secretGradientOverlay then return self.secretGradientOverlay end
+
+    local overlay = self.highlight:GetParent():CreateTexture(self:GetName() .. "_SecretDispelGradient", "ARTWORK", nil, 0)
+    overlay:SetTexture("Interface\\AddOns\\Cell\\Media\\gradient")
+    overlay:SetBlendMode("BLEND")
+    overlay:Hide()
+
+    self.secretGradientOverlay = overlay
+    return overlay
+end
+
+---@param self DispelsWidget
+---@param unit UnitToken?
+---@param auraInstanceID number?
+---@return boolean
+local function ShowSecretDispel(self, unit, auraInstanceID)
+    if not ShouldShowSecretDispel(self) then return false end
+
+    local color = GetSecretDispelColor(unit, auraInstanceID, secretDispelHighlightCurve)
+    if not color then return false end
+
+    ResetSecretDispel(self)
+
+    if self.activeIconType then
+        self.icons[self.activeIconType]:Hide()
+    end
+    if self.activeGlowType then
+        Util.GlowStop(self.glowLayer)
+    end
+
+    self.activeType = "secret:" .. auraInstanceID
+    self.activeIconType = nil
+    self.activeGlowType = nil
+    self.secretDispelActive = true
+
+    local r, g, b = color:GetRGBA()
+    if self.showHighlight then
+        if self.highlightType == "gradient" or self.highlightType == "gradient-half" then
+            self.highlight:Hide()
+            local overlay = EnsureSecretGradientOverlay(self)
+            overlay:ClearAllPoints()
+            overlay:SetAllPoints(self.highlight)
+            overlay:SetVertexColor(r, g, b, 1)
+            overlay:Show()
+        else
+            self.highlight:SetVertexColor(r, g, b, self.highlightType == "entire" and 0.5 or 1)
+            self.highlight:Show()
+        end
+    end
+
+    if self.showIcons then
+        for _, typeInfo in ipairs(SecretDispelTypes) do
+            local icon = self.icons[typeInfo.name]
+            if icon and self.dispelTypes[typeInfo.name] then
+                icon:SetDispel()
+                local bracketColor = GetSecretDispelColor(unit, auraInstanceID, secretDispelBracketCurves[typeInfo.name])
+                if bracketColor then
+                    local _, _, _, alpha = bracketColor:GetRGBA()
+                    icon:SetAlpha(alpha)
+                    icon:Show()
+                else
+                    icon:Hide()
+                end
+            elseif icon then
+                icon:Hide()
+            end
+        end
+    end
+
+    return true
+end
+
+---@param self DispelsWidget
 ---@param type string
 local function SetDispelHighlight_Entire(self, type)
+    ResetSecretDispel(self)
     if not self.showHighlight then return end
     if self.activeType == type then return end
 
@@ -203,6 +369,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelHighlight_Current(self, type)
+    ResetSecretDispel(self)
     if not self.showHighlight then return end
     if self.activeType == type then return end
 
@@ -215,6 +382,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelHighlight_Gradient(self, type)
+    ResetSecretDispel(self)
     if not self.showHighlight then return end
     if self.activeType == type then return end
 
@@ -227,6 +395,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelIcon(self, type)
+    ResetSecretDispel(self)
     if not self.showIcons then return end
 
     if self.activeIconType then
@@ -253,6 +422,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelGlow_Pixel(self, type)
+    ResetSecretDispel(self)
     if not self.showGlow then return end
     if self.activeGlowType == type then return end
 
@@ -266,6 +436,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelGlow_Shine(self, type)
+    ResetSecretDispel(self)
     if not self.showGlow then return end
     if self.activeGlowType == type then return end
 
@@ -279,6 +450,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelGlow_Proc(self, type)
+    ResetSecretDispel(self)
     if not self.showGlow then return end
     if self.activeGlowType == type then return end
 
@@ -291,6 +463,7 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function SetDispelGlow_Normal(self, type)
+    ResetSecretDispel(self)
     if not self.showGlow then return end
     if self.activeGlowType == type then return end
 
@@ -346,6 +519,8 @@ end
 ---@param self DispelsWidget
 ---@param type string
 local function UpdateHighlightStyle(self, type)
+    ResetSecretDispel(self)
+    self.highlightType = type
     self.showHighlight = type ~= "none"
     self.highlight:SetBlendMode("BLEND")
 
@@ -391,6 +566,7 @@ end
 ---@param self DispelsWidget
 ---@param style string
 local function UpdateIconStyle(self, style)
+    ResetSecretDispel(self)
     self.showIcons = style ~= "none"
     -- Reset active icon, makes for a better preview mode
     self.activeIconType = nil
@@ -479,6 +655,7 @@ function W:CreateDispels(button)
     dispels.activeType = nil
     dispels.activeIconType = nil
     dispels.activeGlowType = nil
+    dispels.secretDispelActive = false
 
     dispels.glow = CUF.Defaults.Options.glow
     dispels.showGlow = false
@@ -506,6 +683,8 @@ function W:CreateDispels(button)
 
     dispels.SetDispelIcon = SetDispelIcon
     dispels.ShouldShowDispel = ShouldShowDispel
+    dispels.ShowSecretDispel = ShowSecretDispel
+    dispels.ClearDispel = ClearDispel
     dispels.SetDispelHighlight = SetDispelHighlight_Current
     dispels.SetDispelGlow = SetDispelGlow_Pixel
 
